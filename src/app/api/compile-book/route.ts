@@ -1,9 +1,11 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
+// Removed md-to-pdf import
 
 const OUTPUT_DIRECTORY = path.resolve(process.cwd(), 'public', 'ai-writer-output');
-const MANUSCRIPT_FILENAME = 'full_manuscript.md';
+const MANUSCRIPT_MD_FILENAME = 'full_manuscript.md';
+// Removed PDF filename constant
 
 // Helper function to extract chapter number from filename (e.g., chapter_10.md -> 10)
 const getChapterNumber = (filename: string): number | null => {
@@ -46,15 +48,18 @@ export async function POST(req: Request) {
       fullContent += chapterContent + '\n\n'; // Add double newline between chapters
     }
 
-    // 4. Write the full manuscript file
-    const manuscriptPath = path.join(OUTPUT_DIRECTORY, MANUSCRIPT_FILENAME);
-    await fs.writeFile(manuscriptPath, fullContent.trim(), 'utf8');
+    // 4. Write the full manuscript Markdown file
+    const manuscriptMdPath = path.join(OUTPUT_DIRECTORY, MANUSCRIPT_MD_FILENAME);
+    const finalMdContent = fullContent.trim();
+    await fs.writeFile(manuscriptMdPath, finalMdContent, 'utf8');
+    console.log(`Manuscript Markdown saved successfully: ${manuscriptMdPath}`);
 
-    console.log(`Manuscript compiled successfully: ${manuscriptPath}`);
-
-    // 5. Return success response with the relative path for download link
-    const downloadPath = `/ai-writer-output/${MANUSCRIPT_FILENAME}`;
-    return NextResponse.json({ message: 'Manuscript compiled successfully', path: downloadPath });
+    // 5. Return success response with the relative path for MD download link
+    const downloadMdPath = `/ai-writer-output/${MANUSCRIPT_MD_FILENAME}`;
+    return NextResponse.json({
+        message: 'Manuscript compiled successfully (Markdown)',
+        mdPath: downloadMdPath,
+    });
 
   } catch (error: any) {
     console.error('Error compiling manuscript:', error);

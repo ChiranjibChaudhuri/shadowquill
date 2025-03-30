@@ -168,13 +168,19 @@ PREVIOUS CHAPTER SUMMARY (if applicable):
 CURRENT CHAPTER DETAILS:
 Chapter Number: {chapterNumber}
 Chapter Title: {chapterTitle}
-Chapter Outline/Focus: {chapterOutline}
+Chapter Outline/Focus:
+{chapterOutline}
+
+PRE-DEFINED SCENES FOR THIS CHAPTER:
+{chapterScenes}
+---
 
 Your Task:
 1. Write the complete Chapter {chapterNumber}: "{chapterTitle}".
-2. Strictly follow the provided Chapter Outline/Focus for plot points, character actions, and themes.
-3. Seamlessly integrate details from the World Context and Character Profiles. Maintain consistency.
-4. Write engaging, immersive, and high-quality prose. Vary sentence structure, use vivid descriptions, craft believable dialogue, and show character emotions and thoughts effectively.
+2. Use the Chapter Outline/Focus as the primary guide for the chapter's structure and plot progression.
+3. Incorporate the provided PRE-DEFINED SCENES into the chapter narrative at appropriate points, ensuring smooth transitions and logical flow between the outline points and the scenes. Expand upon the scene content where necessary to fit the narrative. If scene content is missing or minimal, rely more heavily on the outline and scene description.
+4. Seamlessly integrate details from the World Context and Character Profiles. Maintain consistency.
+5. Write engaging, immersive, and high-quality prose. Vary sentence structure, use vivid descriptions, craft believable dialogue, and show character emotions and thoughts effectively.
 5. Ensure the chapter flows logically from the Previous Chapter Summary (if provided) and sets up the next chapter according to the Book Outline.
 6. Maintain consistent character voices and perspectives as established in the Character Profiles and Book Outline.
 7. The chapter MUST be substantial and detailed. Aim for the maximum possible length and completeness within the model's output capabilities (targeting thousands of words). Describe settings, actions, internal thoughts, and dialogue thoroughly. Do not rush the pacing.

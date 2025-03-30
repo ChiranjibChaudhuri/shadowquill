@@ -12,6 +12,8 @@
     "@ai-sdk/google": "^1.2.3",
     "@google/generative-ai": "^0.24.0",
     "ai": "^4.2.8",
+    "markdown-pdf": "^11.0.0",
+    "md-to-pdf": "^5.2.4",
     "next": "15.2.4",
     "next-auth": "^5.0.0-beta.25",
     "react": "^19.0.0",

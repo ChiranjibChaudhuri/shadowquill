@@ -19,6 +19,7 @@ interface ChapterGenerateRequestBody {
   chapterNumber: number;
   chapterTitle: string;
   chapterOutline: string; // Specific outline/focus for this chapter
+  chapterScenes?: string; // Formatted string of scenes for the chapter
 }
 
 export async function POST(req: Request) {
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       chapterNumber,
       chapterTitle,
       chapterOutline,
+      chapterScenes = "No pre-defined scenes provided.", // Default if none provided
     }: ChapterGenerateRequestBody = await req.json();
 
     // Basic validation
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
     systemPrompt = systemPrompt.replace('{chapterNumber}', String(chapterNumber));
     systemPrompt = systemPrompt.replace('{chapterTitle}', chapterTitle);
     systemPrompt = systemPrompt.replace('{chapterOutline}', chapterOutline);
+    systemPrompt = systemPrompt.replace('{chapterScenes}', chapterScenes); // Inject formatted scenes
 
 
     // Call the language model to generate the chapter content
@@ -57,7 +60,7 @@ export async function POST(req: Request) {
       model: model,
       prompt: systemPrompt, // Full context is embedded in the prompt
       temperature: 0.7, // Standard temperature for creative writing
-      maxTokens: 8192, // Request maximum tokens for detailed chapter
+      maxTokens: 65000, // Increase token limit
     });
 
     // Respond with the stream

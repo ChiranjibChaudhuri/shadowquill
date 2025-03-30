@@ -7,7 +7,7 @@ import { worldBuilderChatSystemPrompt } from '@/lib/prompts'; // Import the prom
 // Instantiate the Google AI provider
 // Note: The API key is automatically picked up from the GOOGLE_API_KEY environment variable
 const google = createGoogleGenerativeAI();
-const model = google('models/gemini-2.5-pro-exp-03-25'); // Revert to stable model for testing (or keep experimental if preferred)
+const model = google('models/gemini-2.5-pro-exp-03-25'); // Use experimental model
 
 interface WorldChatRequestBody {
   messages: Message[];
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
         system: systemPrompt,
         messages,
         temperature: 0.7,
-        maxTokens: 4096, // Restore original max tokens
+        maxTokens: 65000, // Increase token limit
       });
 
       // Return the stream response

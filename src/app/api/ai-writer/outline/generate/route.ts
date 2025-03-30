@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       model: model,
       prompt: systemPrompt, // History and context are embedded in the prompt
       temperature: 0.6, // Lower temp for structured outline
-      maxTokens: 8192, // Request maximum tokens for detailed outline
+      maxTokens: 65000, // Increase token limit
     });
 
     // Respond with the stream

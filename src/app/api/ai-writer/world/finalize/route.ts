@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       prompt: systemPrompt, // Use 'prompt' instead of 'system' when history is embedded
       // Optional: Add generation configuration
       temperature: 0.6, // Slightly lower temp for more structured output
-      maxTokens: 8192, // Request maximum possible output tokens for detailed world doc
+      maxTokens: 65000, // Increase token limit
     });
 
     // Respond with the stream

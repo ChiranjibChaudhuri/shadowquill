@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       system: systemPrompt,
       messages,
       temperature: 0.7,
-      maxTokens: 4096, // Allow longer chat responses
+      maxTokens: 65000, // Increase token limit
     });
 
     // Respond with the stream
