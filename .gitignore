@@ -66,3 +66,6 @@ lerna-debug.log*
 # Drizzle ORM specific files (if applicable)
 # drizzle/
 # .drizzle/
+
+# Generated AI Writer Output
+/public/ai-writer-output/

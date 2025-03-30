@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { type Message, useCompletion } from 'ai/react';
 import StageLayout from '@/components/StageLayout';
 import ChatInterface from '@/components/ChatInterface';
@@ -15,6 +16,8 @@ export default function WorldBuildingPage() {
   const [topic, setTopic] = useState<string>('');
   const [worldDescription, setWorldDescription] = useState<string>('');
   const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false); // State for save button loading
+  const router = useRouter(); // Initialize router
   // Removed chatHistory state, ChatInterface manages its own history via localStorageKey
 
   // Load initial state from local storage (excluding chat history)
@@ -128,14 +131,42 @@ export default function WorldBuildingPage() {
             placeholder="The finalized world description will appear here after generation..."
             rows={25}
             className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-            readOnly={isFinalizing || isFinalizationLoading}
+            readOnly={isFinalizing || isFinalizationLoading || isSaving} // Disable textarea while saving
           />
-          {/* Save button for manual edits - relies on local storage */}
            <button
-            onClick={() => localStorage.setItem(LOCAL_STORAGE_KEYS.WORLD_DESCRIPTION, worldDescription)}
-            className="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm"
+            onClick={async () => {
+              setIsSaving(true);
+              // 1. Save to local storage (redundant due to useEffect, but explicit)
+              localStorage.setItem(LOCAL_STORAGE_KEYS.WORLD_DESCRIPTION, worldDescription);
+
+              // 2. Save to file via API
+              try {
+                const response = await fetch('/api/save-file', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    filename: 'world.md', // Define the filename
+                    content: worldDescription
+                  }),
+                });
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.error || 'Failed to save file');
+                }
+                console.log('World description saved to file successfully.');
+                // 3. Navigate to next stage
+                router.push('/characters');
+              } catch (error: any) {
+                console.error('Error saving world description file:', error);
+                alert(`Error saving file: ${error.message}`);
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" // Updated styles for consistency
+            disabled={isSaving || isFinalizing || isFinalizationLoading || !worldDescription} // Disable while saving/finalizing or if no description
           >
-            Save Manual Edits
+            {isSaving ? 'Saving...' : 'Save & Proceed to Characters'}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { type Message, useCompletion } from 'ai/react';
 import StageLayout from '@/components/StageLayout';
 import ChatInterface from '@/components/ChatInterface';
@@ -37,7 +38,9 @@ export default function OutlineCreationPage() {
   const [outline, setOutline] = useState<string>('');
   const [numChapters, setNumChapters] = useState<number>(10);
   const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false); // State for save button loading
   const [parsedChapters, setParsedChapters] = useState<Chapter[]>([]);
+  const router = useRouter(); // Initialize router
   // Chat history managed by ChatInterface
 
   // --- Parsing Logic ---
@@ -227,13 +230,43 @@ export default function OutlineCreationPage() {
             placeholder="The finalized book outline will appear here after generation..."
             rows={25}
             className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-            readOnly={isFinalizing || isFinalizationLoading}
+            readOnly={isFinalizing || isFinalizationLoading || isSaving} // Disable textarea while saving
           />
            <button
-            onClick={() => localStorage.setItem(LOCAL_STORAGE_KEYS.OUTLINE, outline)}
-            className="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm"
+            onClick={async () => {
+              setIsSaving(true);
+              // 1. Save to local storage (already handled by useEffect, but explicit)
+              // localStorage.setItem(LOCAL_STORAGE_KEYS.OUTLINE, outline);
+              // The useEffect already saves the raw outline and the parsed chapters
+
+              // 2. Save raw outline to file via API
+              try {
+                const response = await fetch('/api/save-file', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    filename: 'outline.md', // Define the filename
+                    content: outline // Save the raw outline text
+                  }),
+                });
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.error || 'Failed to save file');
+                }
+                console.log('Outline saved to file successfully.');
+                // 3. Navigate to next stage
+                router.push('/write');
+              } catch (error: any) {
+                console.error('Error saving outline file:', error);
+                alert(`Error saving file: ${error.message}`);
+              } finally {
+                setIsSaving(false);
+              }
+            }}
+            className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" // Updated styles
+            disabled={isSaving || isFinalizing || isFinalizationLoading || !outline || parsedChapters.length === 0} // Disable if saving/finalizing, no outline, or no parsed chapters
           >
-            Save Manual Edits
+            {isSaving ? 'Saving...' : 'Save & Proceed to Write'}
           </button>
           {/* TODO: Add chapter list display and parsing logic */}
           <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded">

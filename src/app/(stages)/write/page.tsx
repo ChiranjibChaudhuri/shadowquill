@@ -35,6 +35,7 @@ export default function WriteChapterPage() {
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
   const [generatedContent, setGeneratedContent] = useState<string>('');
   const [previousChapterContent, setPreviousChapterContent] = useState<string>('');
+  const [isSaving, setIsSaving] = useState<boolean>(false); // State for save button loading
 
   // Load context and parsed chapters from local storage
   useEffect(() => {
@@ -191,14 +192,53 @@ export default function WriteChapterPage() {
                 placeholder={`Generated content for Chapter ${selectedChapter.chapterNumber} will appear here...`}
                 rows={25}
                 className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-                readOnly={isGenerating}
+                readOnly={isGenerating || isSaving} // Disable textarea while saving
               />
               <button
-                onClick={saveManualEdits}
-                className="mt-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded text-sm"
-                disabled={isGenerating}
+                onClick={async () => {
+                  if (!selectedChapter) return;
+                  setIsSaving(true);
+                  const chapterFilename = `chapter_${selectedChapter.chapterNumber}.md`;
+                  const localStorageKey = `${LOCAL_STORAGE_KEYS.GENERATED_CHAPTER_CONTENT_PREFIX}${selectedChapter.chapterNumber}`;
+
+                  // 1. Save to local storage
+                  localStorage.setItem(localStorageKey, generatedContent);
+
+                  // 2. Save to file via API
+                  try {
+                    const response = await fetch('/api/save-file', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        filename: chapterFilename,
+                        content: generatedContent
+                      }),
+                    });
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      throw new Error(errorData.error || 'Failed to save chapter file');
+                    }
+                    console.log(`Chapter ${selectedChapter.chapterNumber} saved to file successfully.`);
+
+                    // 3. Navigate to the next chapter (if one exists)
+                    const nextChapterIndex = parsedChapters.findIndex(chap => chap.chapterNumber === selectedChapter.chapterNumber + 1);
+                    if (nextChapterIndex !== -1) {
+                      setSelectedChapter(parsedChapters[nextChapterIndex]);
+                    } else {
+                      alert('Last chapter saved!'); // Or navigate somewhere else?
+                    }
+
+                  } catch (error: any) {
+                    console.error(`Error saving ${chapterFilename}:`, error);
+                    alert(`Error saving file: ${error.message}`);
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" // Updated styles
+                disabled={isSaving || isGenerating || !generatedContent} // Disable if saving/generating or no content
               >
-                Save Manual Edits
+                {isSaving ? 'Saving...' : `Save Chapter ${selectedChapter.chapterNumber} & Proceed`}
               </button>
             </div>
           ) : (
