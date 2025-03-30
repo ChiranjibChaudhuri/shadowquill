@@ -7,7 +7,7 @@ export const runtime = 'edge';
 
 // Instantiate the Google AI provider
 const google = createGoogleGenerativeAI(); // API key from GOOGLE_API_KEY env var
-const model = google('models/gemini-1.5-pro-latest'); // Use Gemini 1.5 Pro
+const model = google('models/gemini-2.5-pro-exp-03-25'); // Use updated experimental model
 
 interface CharacterChatRequestBody {
   messages: Message[];

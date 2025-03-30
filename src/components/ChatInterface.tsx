@@ -47,15 +47,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     api: apiEndpoint,
     initialMessages: loadedInitialMessages, // Use messages loaded from storage
     body: systemPromptContext, // Send additional context here
-    onFinish: (message) => {
+    onFinish: (message: Message) => { // Add Message type
       // Callback with the final assistant message content when stream ends
       if (onStreamComplete && message.role === 'assistant') {
         onStreamComplete(message.content);
       }
+    },
+    onError: (err) => {
+      // Log error directly from the onError callback
+      console.error("Error received in useChat onError callback:", err);
+      console.error("Full error object from onError callback:", JSON.stringify(err, null, 2));
     }
   });
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Log the error object from useChat when it changes
+  useEffect(() => {
+    if (error) {
+      // Log the full error object structure for detailed inspection (JSON.stringify)
+      console.error("Full error object from useChat hook:", JSON.stringify(error, null, 2));
+      // Keep the original basic log too
+      console.error("Error details from useChat hook (raw):", error);
+    }
+  }, [error]);
 
   // Scroll to bottom and save history when messages change
   useEffect(() => {
@@ -88,7 +103,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </button>
       </div>
       <div ref={chatContainerRef} className="flex-grow overflow-y-auto mb-4 space-y-4 pr-2">
-        {messages.map((m) => (
+        {messages.map((m: Message) => ( // Add Message type
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-[75%] p-3 rounded-lg whitespace-pre-wrap ${
@@ -109,13 +124,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
           </div>
         )}
-        {error && (
-          <div className="flex justify-start">
-            <div className="bg-red-100 text-red-700 p-3 rounded-lg">
-              <span className="font-bold">Error:</span> {error.message}
+        {error && (() => {
+          let displayMessage = error.message;
+          try {
+            // Attempt to parse the error message as JSON (backend might send structured error)
+            const parsedError = JSON.parse(error.message);
+            if (parsedError && parsedError.details) {
+              displayMessage = parsedError.details;
+            } else if (parsedError && parsedError.error) {
+              displayMessage = parsedError.error; // Fallback to error type if details missing
+            }
+          } catch (e) {
+            // If parsing fails, just use the raw error message
+          }
+          return (
+            <div className="flex justify-start">
+              <div className="bg-red-100 text-red-700 p-3 rounded-lg">
+                <span className="font-bold">Error:</span> {displayMessage}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
       <form onSubmit={handleSubmit} className="flex items-center border-t pt-4">
         <input

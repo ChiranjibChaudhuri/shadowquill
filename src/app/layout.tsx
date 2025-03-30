@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import Link from 'next/link'; // Import Link
+import Link from 'next/link';
+// Removed Image import as we'll use standard <img>
 import './globals.css';
 
 const geistSans = Geist({
@@ -14,8 +15,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Shadowquill - AI Book Writer', // Updated title
+  title: 'Shadowquill - AI Book Writer',
   description: 'AI-assisted book writing application',
+  icons: {
+    // Ensure correct type and URL for SVG favicon
+    icon: { url: '/shadowquill-logo.svg', type: 'image/svg+xml' },
+  },
 };
 
 // Simple Header component with navigation
@@ -29,10 +34,12 @@ const AppHeader = () => {
   ];
 
   return (
-    <header className="bg-gray-800 text-white p-4 shadow-md sticky top-0 z-10"> {/* Added sticky header */}
+    <header className="bg-gray-800 text-white p-4 shadow-md sticky top-0 z-10">
       <nav className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-xl font-bold hover:text-gray-300">
-          Shadowquill
+        <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+          {/* Use standard img tag for SVG */}
+          <img src="/shadowquill-logo.svg" alt="Shadowquill Logo" width={32} height={32} className="inline-block" />
+          <span className="text-xl font-bold">Shadowquill</span>
         </Link>
         <ul className="flex space-x-4">
           {navItems.map((item) => (
