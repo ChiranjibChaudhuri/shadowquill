@@ -36,6 +36,8 @@ export default function WriteChapterPage() {
   const [generatedContent, setGeneratedContent] = useState<string>('');
   const [previousChapterContent, setPreviousChapterContent] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false); // State for save button loading
+  const [isCompiling, setIsCompiling] = useState<boolean>(false); // State for compilation
+  const [manuscriptPath, setManuscriptPath] = useState<string | null>(null); // State for download path
 
   // Load context and parsed chapters from local storage
   useEffect(() => {
@@ -220,14 +222,20 @@ export default function WriteChapterPage() {
                     }
                     console.log(`Chapter ${selectedChapter.chapterNumber} saved to file successfully.`);
 
-                    // 3. Navigate to the next chapter (if one exists)
-                    const nextChapterIndex = parsedChapters.findIndex(chap => chap.chapterNumber === selectedChapter.chapterNumber + 1);
-                    if (nextChapterIndex !== -1) {
-                      setSelectedChapter(parsedChapters[nextChapterIndex]);
-                    } else {
-                      alert('Last chapter saved!'); // Or navigate somewhere else?
-                    }
+                    // 3. Check if it was the last chapter
+                    const isLastChapter = selectedChapter.chapterNumber === parsedChapters.length;
 
+                    if (isLastChapter) {
+                      // Don't automatically navigate, user can now compile
+                       alert('Last chapter saved! You can now compile the full manuscript.');
+                       setManuscriptPath(null); // Reset compile state if last chapter is re-saved
+                    } else {
+                      // Navigate to the next chapter
+                      const nextChapterIndex = parsedChapters.findIndex(chap => chap.chapterNumber === selectedChapter.chapterNumber + 1);
+                      if (nextChapterIndex !== -1) {
+                        setSelectedChapter(parsedChapters[nextChapterIndex]);
+                      }
+                    }
                   } catch (error: any) {
                     console.error(`Error saving ${chapterFilename}:`, error);
                     alert(`Error saving file: ${error.message}`);
@@ -240,6 +248,57 @@ export default function WriteChapterPage() {
               >
                 {isSaving ? 'Saving...' : `Save Chapter ${selectedChapter.chapterNumber} & Proceed`}
               </button>
+
+              {/* Display compile button/link after last chapter is saved */}
+              {selectedChapter.chapterNumber === parsedChapters.length && !isSaving && (
+                <div className="mt-6 border-t pt-4">
+                  <h3 className="text-lg font-semibold mb-2">Manuscript Compilation</h3>
+                  {!manuscriptPath ? (
+                    <button
+                      onClick={async () => {
+                        setIsCompiling(true);
+                        setManuscriptPath(null); // Reset path
+                        try {
+                          const response = await fetch('/api/compile-book', { method: 'POST' });
+                          if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || 'Failed to compile manuscript');
+                          }
+                          const result = await response.json();
+                          setManuscriptPath(result.path); // Set the download path
+                          alert('Manuscript compiled successfully!');
+                        } catch (error: any) {
+                          console.error('Error compiling manuscript:', error);
+                          alert(`Error compiling manuscript: ${error.message}`);
+                        } finally {
+                          setIsCompiling(false);
+                        }
+                      }}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                      disabled={isCompiling}
+                    >
+                      {isCompiling ? 'Compiling...' : 'Compile Full Manuscript'}
+                    </button>
+                  ) : (
+                    <div className="text-center">
+                      <p className="mb-2 text-green-700 dark:text-green-400">Manuscript compiled!</p>
+                      <a
+                        href={manuscriptPath}
+                        download="full_manuscript.md"
+                        className="inline-block bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+                      >
+                        Download Manuscript (.md)
+                      </a>
+                       <button
+                         onClick={() => setManuscriptPath(null)} // Allow recompiling
+                         className="ml-4 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                       >
+                         Recompile
+                       </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center justify-center h-full text-gray-500">
