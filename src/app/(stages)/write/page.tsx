@@ -41,6 +41,7 @@ export default function WriteChapterPage() {
   const [worldDescription, setWorldDescription] = useState<string>('');
   const [characterProfiles, setCharacterProfiles] = useState<string>('');
   const [fullOutline, setFullOutline] = useState<string>('');
+  const [mindMapData, setMindMapData] = useState<any>(null); // Added state for mind map data
   const [parsedChapters, setParsedChapters] = useState<Chapter[]>([]);
 
   // Chapter specific state
@@ -104,34 +105,42 @@ export default function WriteChapterPage() {
     return chapters;
   }, []);
 
-  // Load general context from backend APIs
+  // Load general context from backend APIs (including Mind Map)
   useEffect(() => {
     const loadGeneralData = async () => {
       if (activeStoryId) {
-        setIsLoadingData(true);
+        setIsLoadingData(true); // Set loading true at the start
         try {
-            const [worldData, charData, outlineData] = await Promise.all([
+            // Fetch world, characters, outline, and mind map data
+            const [worldData, charData, outlineData, mapData] = await Promise.all([
                 loadDataFromApi('/api/story-data/world', {}),
                 loadDataFromApi('/api/story-data/characters', {}),
-                loadDataFromApi('/api/story-data/outline', {})
+                loadDataFromApi('/api/story-data/outline', {}),
+                loadDataFromApi('/api/story-data/mindmap', {}, { mindMapData: null }) // Fetch mind map data, default null
             ]);
             setWorldDescription(worldData?.description ?? '');
             setCharacterProfiles(charData?.profiles ?? '');
             setFullOutline(outlineData?.outline ?? '');
+            setMindMapData(mapData?.mindMapData ?? null); // Store mind map data
             setParsedChapters(parseOutline(outlineData?.outline ?? ''));
         } catch (error) {
             console.error("Error loading general story data:", error);
-            setWorldDescription(''); setCharacterProfiles(''); setFullOutline(''); setParsedChapters([]);
+            setWorldDescription(''); setCharacterProfiles(''); setFullOutline('');
+            setMindMapData(null); setParsedChapters([]);
         } finally {
-            // Loading state handled in chapter data loading effect
+            // Loading state is handled later in the chapter data loading effect
+            // to ensure all context is available before chapter-specific loading starts
         }
       } else {
+          // Reset all state if no active story
           setWorldDescription(''); setCharacterProfiles(''); setFullOutline('');
-          setParsedChapters([]); setSelectedChapter(null); setIsLoadingData(false);
+          setMindMapData(null); setParsedChapters([]); setSelectedChapter(null);
+          setIsLoadingData(false); // Stop loading if no active story
       }
     };
     loadGeneralData();
-  }, [activeStoryId, loadDataFromApi, parseOutline]);
+    // Dependencies now include setMindMapData
+  }, [activeStoryId, loadDataFromApi, parseOutline, setMindMapData]);
 
   // Get localStorage key helper for scenes
   const getChapterScenesKey = useCallback((chapterNumber: number) =>
@@ -228,7 +237,8 @@ export default function WriteChapterPage() {
   const handleGenerateScene = async (sceneId: string) => {
     const sceneToGenerate = chapterScenes.find(s => s.id === sceneId);
     if (!sceneToGenerate || !selectedChapter || !sceneToGenerate.description.trim() || !activeStoryId) return;
-    if (!worldDescription || !characterProfiles || !fullOutline) { alert('Missing required context.'); return; }
+    // Check for mind map data as well if needed (optional context)
+    if (!worldDescription || !characterProfiles || !fullOutline) { alert('Missing required context (World, Characters, Outline).'); return; }
 
     setChapterScenes(prevScenes => prevScenes.map(scene =>
       scene.id === sceneId ? { ...scene, isGenerating: true, content: 'Generating...' } : scene
@@ -239,9 +249,14 @@ export default function WriteChapterPage() {
     try {
       const finalCompletion = await completeScene('', {
         body: {
-          worldContext: worldDescription, characterContext: characterProfiles, outlineContext: fullOutline,
-          previousContext: previousContextForScene, chapterNumber: selectedChapter.chapterNumber,
-          chapterTitle: selectedChapter.title, chapterOutline: selectedChapter.rawContent,
+          worldContext: worldDescription,
+          characterContext: characterProfiles,
+          outlineContext: fullOutline,
+          mindMapContext: mindMapData ? JSON.stringify(mindMapData) : null, // Pass mind map data
+          previousContext: previousContextForScene,
+          chapterNumber: selectedChapter.chapterNumber,
+          chapterTitle: selectedChapter.title,
+          chapterOutline: selectedChapter.rawContent,
           sceneDescription: sceneToGenerate.description,
         }
       });
@@ -265,7 +280,8 @@ export default function WriteChapterPage() {
   // Chapter Generation Function
   const handleGenerateChapter = useCallback(async () => {
     if (!selectedChapter || !activeStoryId) { alert('Please select a chapter.'); return; }
-    if (!worldDescription || !characterProfiles || !fullOutline) { alert('Missing required context.'); return; }
+    // Check for mind map data as well (optional context)
+    if (!worldDescription || !characterProfiles || !fullOutline) { alert('Missing required context (World, Characters, Outline).'); return; }
     if (chapterScenes.length === 0) { alert('Please add and generate at least one scene first.'); return; }
 
     const formattedScenes = chapterScenes.map((scene, index) =>
@@ -273,12 +289,18 @@ export default function WriteChapterPage() {
       ).join('\n\n---\n\n');
 
     await complete('', { body: {
-      worldContext: worldDescription, characterContext: characterProfiles, outlineContext: fullOutline,
-      previousChapterContext: previousChapterContent, chapterNumber: selectedChapter.chapterNumber,
-      chapterTitle: selectedChapter.title, chapterOutline: selectedChapter.rawContent,
+      worldContext: worldDescription,
+      characterContext: characterProfiles,
+      outlineContext: fullOutline,
+      mindMapContext: mindMapData ? JSON.stringify(mindMapData) : null, // Pass mind map data
+      previousChapterContext: previousChapterContent,
+      chapterNumber: selectedChapter.chapterNumber,
+      chapterTitle: selectedChapter.title,
+      chapterOutline: selectedChapter.rawContent,
       chapterScenes: formattedScenes
     }});
-  }, [selectedChapter, activeStoryId, worldDescription, characterProfiles, fullOutline, previousChapterContent, chapterScenes, complete]);
+    // Dependencies now include mindMapData
+  }, [selectedChapter, activeStoryId, worldDescription, characterProfiles, fullOutline, mindMapData, previousChapterContent, chapterScenes, complete]);
 
   // Save and Proceed Function - Saves chapter content to DB via API
   const handleSaveAndProceed = async () => {

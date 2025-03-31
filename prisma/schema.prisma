@@ -36,6 +36,7 @@ model Story {
   numCharacters      Int?      @default(3)
   outlineText        String?
   numChapters        Int?      @default(10)
+  mindMapData        String?   // Store ReactFlow data as JSON string
   // Parsed chapters could be stored as JSON or derived on load
 
   chapters           Chapter[] // Relation to individual chapters
