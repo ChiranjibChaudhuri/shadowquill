@@ -1,109 +1,107 @@
-# Shadowquill - AI Book Writer
+# Shadowquill - AI Book Writing Assistant
 
-Shadowquill is a web application designed to assist authors in the creative process of writing books, leveraging the power of generative AI. It guides users through structured stages, from initial world-building and character development to outlining and drafting chapters.
+Shadowquill is a web application designed to assist authors in the creative process of writing a book, leveraging AI for brainstorming, generation, and refinement across different stages.
 
-Built with Next.js, React, TypeScript, and Tailwind CSS, Shadowquill provides an interactive and streamlined experience for bringing stories to life.
+![Shadowquill Logo](public/shadowquill-logo.svg)
 
 ## Features
 
-*   **Guided Writing Process:** Follows a step-by-step workflow:
-    *   **World Building:** Define the setting, rules, history, and atmosphere of your story's world through an interactive chat interface.
-    *   **Character Creation:** Develop compelling characters, outlining their backstories, motivations, appearances, and relationships via chat.
-    *   **Outline Generation:** Create a structured plot outline, breaking down the story into acts, chapters, and key scenes based on your world and characters.
-    *   **Chapter/Scene Writing:** Generate draft content for individual chapters or scenes based on the established outline, world, and character details.
-*   **Interactive AI Chat:** Utilizes large language models (like Google Gemini) via dedicated chat interfaces for each stage, allowing for dynamic brainstorming and content generation.
-*   **Streaming Responses:** Provides real-time feedback and content generation using streaming technology.
-*   **Content Management:** Allows users to review, edit, and save the generated content (world description, character profiles, outline, chapters) at each stage.
-*   **Modern Tech Stack:** Built with robust and popular web technologies for a performant and maintainable application.
+*   **Multi-Story Management:** Organize and work on multiple writing projects simultaneously.
+*   **Staged Workflow:** Guides users through a structured writing process:
+    *   **World Building:** Define settings, rules, and atmosphere with AI brainstorming.
+    *   **Character Creation:** Develop detailed characters within the established world context.
+    *   **Outline Generation:** Structure the plot with an AI-assisted chapter-by-chapter outline.
+    *   **Chapter Writing:** Generate chapter content scene-by-scene or as a whole, based on the outline and defined scenes.
+*   **AI Integration:** Utilizes Google Gemini models via the Vercel AI SDK for content generation and brainstorming.
+*   **Persistence:** Saves story progress (world, characters, outline, chapters, scenes) locally using the browser's `localStorage` and saves generated artifacts as Markdown files on the server within story-specific directories.
+*   **Manuscript Compilation:** Compiles individual chapter files into a single Markdown manuscript for the selected story.
 
-## Technology Stack
+## Tech Stack
 
-*   **Framework:** [Next.js](https://nextjs.org/) (React Framework)
-*   **Language:** [TypeScript](https://www.typescriptlang.org/)
-*   **Styling:** [Tailwind CSS](https://tailwindcss.com/)
-*   **AI Integration:** Google Gemini API (or other configurable LLM)
-*   **API Communication:** Next.js API Routes, Server-Sent Events (SSE) / Streaming
-*   **State Management:** (To be determined - e.g., React Context, Zustand)
-
-## Project Structure (Illustrative)
-
-```
-.
-├── public/             # Static assets
-├── src/
-│   ├── app/            # Next.js App Router
-│   │   ├── api/        # API Routes
-│   │   │   └── ai-writer/
-│   │   │       ├── world/
-│   │   │       ├── characters/
-│   │   │       ├── outline/
-│   │   │       └── chapter/
-│   │   ├── (stages)/   # UI Routes/Components for each writing stage
-│   │   ├── layout.tsx  # Root layout
-│   │   └── page.tsx    # Home page
-│   ├── components/     # Reusable UI components (e.g., ChatInterface)
-│   ├── lib/            # Utility functions, AI client setup
-│   ├── prompts/        # AI prompt templates
-│   └── styles/         # Global styles (if needed beyond Tailwind)
-├── .env.local          # Environment variables (API Keys)
-├── next.config.ts      # Next.js configuration
-├── tailwind.config.ts  # Tailwind CSS configuration
-├── tsconfig.json       # TypeScript configuration
-└── package.json        # Project dependencies
-```
+*   **Framework:** Next.js (App Router)
+*   **Language:** TypeScript
+*   **Styling:** Tailwind CSS
+*   **AI:** Vercel AI SDK, Google Gemini
+*   **Icons:** Lucide React
 
 ## Getting Started
 
 ### Prerequisites
 
 *   Node.js (v18 or later recommended)
-*   npm or yarn
-*   Access to a Generative AI API (e.g., Google AI Studio for a Gemini API Key)
+*   npm (usually comes with Node.js) or pnpm (recommended, install via `npm install -g pnpm`)
+*   Google Cloud Project with Generative AI API enabled.
+*   Google API Key
 
-### Installation
+### Installation & Setup
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/ChiranjibChaudhuri/shadowquill.git
     cd shadowquill
     ```
 2.  **Install dependencies:**
     ```bash
-    npm install
+    pnpm install
     # or
-    yarn install
+    # npm install
     ```
 3.  **Set up environment variables:**
     *   Create a file named `.env.local` in the root directory.
-    *   Add your AI API key:
+    *   Add your Google API key:
         ```
-        GOOGLE_API_KEY=YOUR_API_KEY_HERE
+        GOOGLE_API_KEY=YOUR_GOOGLE_API_KEY_HERE
+        ```
+    *   *(Optional: If implementing Google OAuth)* Add OAuth credentials and a secret:
+        ```
+        GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
+        GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+        AUTH_SECRET=YOUR_GENERATED_AUTH_SECRET # Generate with 'openssl rand -base64 32'
         ```
 4.  **Run the development server:**
     ```bash
-    npm run dev
+    pnpm dev
     # or
-    yarn dev
+    # npm run dev
     ```
 5.  Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Usage
+## Project Structure
 
-Navigate through the application's stages:
-
-1.  **World Building:** Start by defining your story's world. Engage with the AI chat to flesh out details. Save the final description.
-2.  **Character Creation:** Create your main characters, interacting with the AI to explore their traits and backstories. Save the character profiles.
-3.  **Outline:** Develop a plot outline based on your world and characters. Use the chat to structure your story. Save the outline.
-4.  **Write:** Generate draft content for chapters or scenes using the previously defined elements.
-
-*(Further details on specific interactions and features will be added as development progresses.)*
+*   `src/app/`: Main application routes (App Router).
+    *   `page.tsx`: Homepage.
+    *   `layout.tsx`: Root layout, includes header/footer and context providers.
+    *   `stories/page.tsx`: Story management page.
+    *   `(stages)/`: Directory group for the main writing stages (world, characters, etc.).
+    *   `api/`: Backend API routes.
+        *   `ai-writer/`: Routes for AI generation (chat, finalize, chapter, scene).
+        *   `save-file/`: Route for saving generated content to files.
+        *   `read-story-file/`: Route for reading saved content files.
+        *   `compile-book/`: Route for compiling chapters into a manuscript.
+        *   `create-story-directory/`: Route for creating story directories.
+*   `src/components/`: Reusable React components (e.g., `ChatInterface`, `StageLayout`).
+*   `src/context/`: React Context providers (e.g., `StoryContext`).
+*   `src/lib/`: Utility functions and constants (e.g., `prompts.ts`).
+*   `public/`: Static assets.
+    *   `ai-writer-output/`: Default directory for saved story files (organized by story ID).
 
 ## Contributing
 
-Contributions are welcome! Please follow standard Git workflow (fork, branch, pull request).
+Contributions are welcome! If you'd like to contribute, please follow these steps:
 
-*(Contribution guidelines to be added)*
+1.  **Fork the repository.**
+2.  **Create a new branch** for your feature or bug fix (`git checkout -b feature/your-feature-name` or `git checkout -b fix/your-bug-fix`).
+3.  **Make your changes.**
+4.  **Commit your changes** with clear, descriptive messages.
+5.  **Push your branch** to your fork (`git push origin feature/your-feature-name`).
+6.  **Open a Pull Request** against the `main` branch of the original repository.
+
+Please ensure your code adheres to the existing style and includes relevant updates if necessary.
 
 ## License
 
-*(License information to be added)*
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+*Happy Writing!*
