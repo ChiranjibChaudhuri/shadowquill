@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Optional User model for future authentication integration
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique // Optional email
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  stories   Story[] // Relation to stories created by the user
+}
+
+model Story {
+  id                 String    @id @default(cuid()) // Use CUID for unique IDs
+  title              String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  userId             String?   // Optional foreign key to User
+  user               User?     @relation(fields: [userId], references: [id])
+
+  // Store main artifacts as text blobs
+  // SQLite's TEXT type handles large strings, @db.Text is not needed/supported
+  worldTopic         String?
+  worldDescription   String?
+  characterProfiles  String?
+  numCharacters      Int?      @default(3)
+  outlineText        String?
+  numChapters        Int?      @default(10)
+  // Parsed chapters could be stored as JSON or derived on load
+
+  chapters           Chapter[] // Relation to individual chapters
+}
+
+model Chapter {
+  id             String   @id @default(cuid())
+  chapterNumber  Int
+  title          String?
+  content        String?           // Store the full generated chapter text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  storyId        String   // Foreign key to Story
+  story          Story    @relation(fields: [storyId], references: [id], onDelete: Cascade) // Cascade delete chapters if story is deleted
+
+  @@unique([storyId, chapterNumber]) // Ensure chapter numbers are unique within a story
+}
+
+// We are not storing individual Scenes in the DB in this iteration.
+// They will remain managed in localStorage via StoryContext for now.

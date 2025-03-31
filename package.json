@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/google": "^1.2.3",
     "@google/generative-ai": "^0.24.0",
+    "@prisma/client": "^6.5.0",
     "ai": "^4.2.8",
     "lucide-react": "^0.485.0",
     "markdown-pdf": "^11.0.0",
@@ -28,6 +29,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.2.4",
+    "prisma": "^6.5.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

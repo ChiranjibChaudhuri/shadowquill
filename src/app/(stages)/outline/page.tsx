@@ -9,12 +9,8 @@ import { useStoryContext } from '@/context/StoryContext';
 
 // Define keys for story-specific data (used for localStorage chat history key)
 const STORY_DATA_KEYS = {
-  WORLD_DESCRIPTION: 'world_description',
-  CHARACTER_PROFILES: 'character_profiles',
-  OUTLINE: 'outline',
   OUTLINE_CHAT_HISTORY: 'outline_chat_history',
-  NUM_CHAPTERS: 'num_chapters',
-  PARSED_CHAPTERS: 'parsed_chapters',
+  // PARSED_CHAPTERS: 'parsed_chapters', // No longer using localStorage for this
 };
 
 // Define filenames for backend storage
@@ -23,7 +19,6 @@ const FILENAMES = {
     CHARACTER_PROFILES: 'characters.md',
     OUTLINE: 'outline.md',
     NUM_CHAPTERS: 'num_chapters.txt',
-    // Parsed chapters are derived, not loaded directly from a single file
 }
 
 // Define structure for parsed chapters
@@ -41,7 +36,7 @@ interface Chapter {
 }
 
 export default function OutlineCreationPage() {
-  const { activeStoryId, getStoryData, setStoryData } = useStoryContext(); // Keep set/get for chat history
+  const { activeStoryId } = useStoryContext();
   const router = useRouter();
 
   const [worldDescription, setWorldDescription] = useState<string>('');
@@ -77,7 +72,7 @@ export default function OutlineCreationPage() {
     }
   }, [activeStoryId]);
 
-  // --- Parsing Logic (remains the same) ---
+  // --- Parsing Logic ---
   const parseOutline = useCallback((outlineText: string): Chapter[] => {
     const chapters: Chapter[] = [];
     const chapterRegex = /^##\s+Chapter\s+(\d+):\s*(.*)$/gm;
@@ -108,19 +103,23 @@ export default function OutlineCreationPage() {
     const loadInitialData = async () => {
       if (activeStoryId) {
         setIsLoadingData(true);
-        const [loadedWorld, loadedChars, loadedOutline, loadedNumStr] = await Promise.all([
-            loadDataFromFile(FILENAMES.WORLD_DESCRIPTION),
-            loadDataFromFile(FILENAMES.CHARACTER_PROFILES),
-            loadDataFromFile(FILENAMES.OUTLINE),
-            loadDataFromFile(FILENAMES.NUM_CHAPTERS, '10')
-        ]);
-        setWorldDescription(loadedWorld);
-        setCharacterProfiles(loadedChars);
-        setOutline(loadedOutline);
-        setNumChapters(parseInt(loadedNumStr, 10) || 10);
-        // Parse loaded outline immediately
-        setParsedChapters(parseOutline(loadedOutline));
-        setIsLoadingData(false);
+        try {
+            const [loadedWorld, loadedChars, loadedOutline, loadedNumStr] = await Promise.all([
+                loadDataFromFile(FILENAMES.WORLD_DESCRIPTION),
+                loadDataFromFile(FILENAMES.CHARACTER_PROFILES),
+                loadDataFromFile(FILENAMES.OUTLINE),
+                loadDataFromFile(FILENAMES.NUM_CHAPTERS, '10')
+            ]);
+            setWorldDescription(loadedWorld);
+            setCharacterProfiles(loadedChars);
+            setOutline(loadedOutline);
+            setNumChapters(parseInt(loadedNumStr, 10) || 10);
+            setParsedChapters(parseOutline(loadedOutline)); // Parse loaded outline
+        } catch (error) {
+            console.error("Error loading outline page data:", error);
+        } finally {
+            setIsLoadingData(false);
+        }
       } else {
           setWorldDescription('');
           setCharacterProfiles('');
@@ -133,29 +132,18 @@ export default function OutlineCreationPage() {
     loadInitialData();
   }, [activeStoryId, loadDataFromFile, parseOutline]);
 
-  // Re-parse and save parsed chapters whenever outline text changes
+  // Re-parse outline whenever outline text changes
   useEffect(() => {
-    if (activeStoryId) {
-        const chapters = parseOutline(outline);
-        setParsedChapters(chapters);
-        // Save parsed chapters to localStorage via context for Write stage to pick up
-        setStoryData(activeStoryId, STORY_DATA_KEYS.PARSED_CHAPTERS, chapters);
-    }
-  }, [outline, activeStoryId, parseOutline, setStoryData]);
-
-  // Save numChapters to context (still useful for chat)
-  useEffect(() => {
-    if (activeStoryId) {
-      setStoryData(activeStoryId, STORY_DATA_KEYS.NUM_CHAPTERS, numChapters);
-    }
-  }, [numChapters, activeStoryId, setStoryData]);
-
+    // No need to check activeStoryId, as outline state is local
+    const chapters = parseOutline(outline);
+    setParsedChapters(chapters);
+  }, [outline, parseOutline]);
 
   // --- Finalization Logic ---
   const { complete, isLoading: isFinalizationLoading, error: finalizationError } = useCompletion({
     api: '/api/ai-writer/outline/generate',
     onFinish: (_, finalCompletion) => {
-      setOutline(finalCompletion); // Update state, useEffect handles parsing and saving parsed chapters
+      setOutline(finalCompletion); // Update state, useEffect above handles parsing
       setIsFinalizing(false);
     },
     onError: (err) => {
@@ -166,8 +154,13 @@ export default function OutlineCreationPage() {
 
   const handleFinalize = useCallback(async () => {
     if (!activeStoryId) return;
+    // Read chat history directly from localStorage
     const chatHistoryKey = `shadowquill_story_data_${activeStoryId}_${STORY_DATA_KEYS.OUTLINE_CHAT_HISTORY}`;
-    const historyToFinalize = getStoryData<Message[]>(activeStoryId, chatHistoryKey, []);
+    let historyToFinalize: Message[] = [];
+    const storedHistory = localStorage.getItem(chatHistoryKey);
+     if (storedHistory) {
+       try { historyToFinalize = JSON.parse(storedHistory); } catch (e) { console.error("Failed to parse chat history", e); }
+     }
 
     if (historyToFinalize.length === 0) { alert('Chat history is empty.'); return; }
     if (!worldDescription || !characterProfiles) { alert('World/Character context missing.'); return; }
@@ -177,37 +170,32 @@ export default function OutlineCreationPage() {
         messages: historyToFinalize, worldContext: worldDescription,
         characterContext: characterProfiles, numChapters: numChapters
     }});
-  }, [activeStoryId, worldDescription, characterProfiles, numChapters, complete, getStoryData]);
+  }, [activeStoryId, worldDescription, characterProfiles, numChapters, complete]);
 
-  // Save & Proceed Handler
+  // Save & Proceed Handler - Saves to DB via API
   const handleSaveAndProceed = async () => {
       if (!activeStoryId) return;
       setIsSaving(true);
       try {
-        // Save Outline and Num Chapters to files
-        const savePromises = [
-          fetch('/api/save-file', {
-            method: 'POST',
+        const response = await fetch('/api/story-data/outline', {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storyId: activeStoryId, filename: FILENAMES.OUTLINE, content: outline }),
-          }),
-           fetch('/api/save-file', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storyId: activeStoryId, filename: FILENAMES.NUM_CHAPTERS, content: String(numChapters) }),
-          })
-        ];
-        // Note: Parsed chapters are saved to localStorage via useEffect, not directly to a file here.
+            body: JSON.stringify({
+                storyId: activeStoryId,
+                outline: outline,
+                numChapters: numChapters
+            }),
+        });
 
-        const responses = await Promise.all(savePromises);
-        for (const response of responses) {
-            if (!response.ok) throw new Error((await response.json()).error || 'Failed to save one or more files');
+        if (!response.ok) {
+            throw new Error((await response.json()).error || 'Failed to save outline data');
         }
-        console.log('Outline and chapter count saved to files successfully.');
+
+        console.log('Outline data saved to database successfully.');
         router.push('/write');
       } catch (error: any) {
-        console.error('Error saving outline data files:', error);
-        alert(`Error saving files: ${error.message}`);
+        console.error('Error saving outline data:', error);
+        alert(`Error saving outline data: ${error.message}`);
       } finally {
         setIsSaving(false);
       }
@@ -219,7 +207,7 @@ export default function OutlineCreationPage() {
 
   return (
     <StageLayout>
-       {(!worldDescription || !characterProfiles) && activeStoryId && (
+       {(!worldDescription || !characterProfiles) && activeStoryId && !isLoadingData && (
          <div className="mb-4 p-4 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-md">
            <strong>Warning:</strong> World or Character context missing for this story. Please complete previous stages.
          </div>
@@ -238,7 +226,7 @@ export default function OutlineCreationPage() {
               onChange={(e) => setNumChapters(Math.max(1, parseInt(e.target.value, 10) || 1))}
               min="1"
               className="w-20 p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              disabled={!activeStoryId || isSaving || isFinalizing}
+              disabled={!activeStoryId || isSaving || isFinalizing || isLoadingData}
             />
           </div>
 
@@ -259,7 +247,7 @@ export default function OutlineCreationPage() {
 
           <button
             onClick={handleFinalize}
-            disabled={!activeStoryId || isFinalizing || isFinalizationLoading || !worldDescription || !characterProfiles}
+            disabled={!activeStoryId || isFinalizing || isFinalizationLoading || !worldDescription || !characterProfiles || isLoadingData}
             className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
           >
             {isFinalizing || isFinalizationLoading ? 'Finalizing...' : `Finalize ${numChapters}-Chapter Outline`}
@@ -278,12 +266,12 @@ export default function OutlineCreationPage() {
             placeholder="The finalized book outline will appear here after generation..."
             rows={25}
             className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-            readOnly={!activeStoryId || isFinalizing || isFinalizationLoading || isSaving}
+            readOnly={!activeStoryId || isFinalizing || isFinalizationLoading || isSaving || isLoadingData}
           />
            <button
-            onClick={handleSaveAndProceed} // Use new handler
+            onClick={handleSaveAndProceed}
             className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-            disabled={!activeStoryId || isSaving || isFinalizing || isFinalizationLoading || !outline || parsedChapters.length === 0}
+            disabled={!activeStoryId || isSaving || isFinalizing || isFinalizationLoading || !outline || parsedChapters.length === 0 || isLoadingData}
           >
             {isSaving ? 'Saving...' : 'Save & Proceed to Write'}
           </button>
@@ -295,7 +283,7 @@ export default function OutlineCreationPage() {
                     {parsedChapters.map(ch => <li key={ch.chapterNumber}>Ch {ch.chapterNumber}: {ch.title}</li>)}
                 </ul>
             ) : (
-                <p className="text-sm text-gray-500">No chapters parsed yet.</p>
+                <p className="text-sm text-gray-500">{isLoadingData ? 'Loading...' : 'No chapters parsed yet.'}</p>
             )}
           </div>
         </div>
