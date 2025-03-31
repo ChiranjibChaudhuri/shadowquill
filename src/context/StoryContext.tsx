@@ -1,55 +1,66 @@
 'use client';
 
-import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback, useMemo } from 'react'; // Import useMemo
+import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback, useMemo } from 'react';
 
+// Keep Story interface
 interface Story {
   id: string;
   title: string;
-  createdAt: number; // Timestamp
-  // Add other metadata later if needed (e.g., lastModified)
+  createdAt: number; // Keep timestamp from DB (or Date object)
+  // Add other fields from Prisma schema if needed later
 }
 
 interface StoryContextType {
   stories: Story[];
   activeStoryId: string | null;
   setActiveStoryId: (id: string | null) => void;
-  addStory: (title: string) => string; // Returns the new story ID
-  deleteStory: (id: string) => void;
-  updateStoryTitle: (id: string, newTitle: string) => void;
-  getStoryData: <T>(storyId: string, key: string, defaultValue: T) => T;
-  setStoryData: <T>(storyId: string, key: string, value: T) => void;
-  deleteStoryData: (storyId: string, key: string) => void;
+  addStory: (title: string) => Promise<Story>; // Returns the new story from DB
+  deleteStory: (id: string) => Promise<void>;
+  updateStoryTitle: (id: string, newTitle: string) => Promise<void>;
+  refreshStories: () => Promise<void>; // Function to manually refresh list
+  isLoadingStories: boolean;
+  // Remove localStorage data helpers
+  // getStoryData: <T>(storyId: string, key: string, defaultValue: T) => T;
+  // setStoryData: <T>(storyId: string, key: string, value: T) => void;
+  // deleteStoryData: (storyId: string, key: string) => void;
 }
 
 const StoryContext = createContext<StoryContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_STORIES_KEY = 'shadowquill_stories_metadata';
+// Keep key for active story ID
 const LOCAL_STORAGE_ACTIVE_STORY_KEY = 'shadowquill_active_story_id';
-const LOCAL_STORAGE_STORY_DATA_PREFIX = 'shadowquill_story_data_'; // Prefix for story-specific data
+// Remove other localStorage keys
 
 export const StoryProvider = ({ children }: { children: ReactNode }) => {
   const [stories, setStories] = useState<Story[]>([]);
   const [activeStoryId, setActiveStoryIdState] = useState<string | null>(null);
+  const [isLoadingStories, setIsLoadingStories] = useState<boolean>(true); // Loading state
 
-  // Load stories metadata and active story ID from localStorage on mount
-  useEffect(() => {
-    const storedStories = localStorage.getItem(LOCAL_STORAGE_STORIES_KEY);
-    if (storedStories) {
-      try {
-        setStories(JSON.parse(storedStories));
-      } catch (e) {
-        console.error("Failed to parse stories metadata from localStorage", e);
-        localStorage.removeItem(LOCAL_STORAGE_STORIES_KEY);
+  // Function to fetch stories from API
+  const fetchStories = useCallback(async () => {
+    setIsLoadingStories(true);
+    try {
+      const response = await fetch('/api/stories/list');
+      if (!response.ok) {
+        throw new Error('Failed to fetch stories');
       }
+      const data = await response.json();
+      // Convert createdAt string from DB to number if needed, or adjust Story interface
+      setStories(data.map((story: any) => ({ ...story, createdAt: new Date(story.createdAt).getTime() })));
+    } catch (error) {
+      console.error("Error fetching stories:", error);
+      setStories([]); // Clear stories on error
+    } finally {
+      setIsLoadingStories(false);
     }
-    const storedActiveId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_STORY_KEY);
-    setActiveStoryIdState(storedActiveId);
   }, []);
 
-  // Save stories metadata whenever it changes
+  // Load stories on mount and active story ID from localStorage
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_STORIES_KEY, JSON.stringify(stories));
-  }, [stories]);
+    fetchStories();
+    const storedActiveId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_STORY_KEY);
+    setActiveStoryIdState(storedActiveId);
+  }, [fetchStories]); // fetchStories is memoized
 
   // Save active story ID whenever it changes
   const setActiveStoryId = useCallback((id: string | null) => {
@@ -61,76 +72,78 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const addStory = (title: string): string => {
-    const newStory: Story = {
-      id: Date.now().toString(), // Simple unique ID
-      title: title || `Untitled Story ${stories.length + 1}`,
-      createdAt: Date.now(),
-    };
-    setStories(prev => [...prev, newStory]);
-    setActiveStoryId(newStory.id); // Automatically activate the new story
-    return newStory.id;
-  };
+  // --- API-based CRUD operations ---
 
-  const deleteStory = (id: string) => {
-    // TODO: Add confirmation dialog?
-    // Delete associated story data
-    Object.keys(localStorage).forEach(key => {
-        if (key.startsWith(`${LOCAL_STORAGE_STORY_DATA_PREFIX}${id}_`)) {
-            localStorage.removeItem(key);
-        }
-    });
-    // Delete metadata
-    setStories(prev => prev.filter(story => story.id !== id));
-    // If the deleted story was active, deactivate
-    if (activeStoryId === id) {
-      setActiveStoryId(null);
-    }
-  };
-
-  const updateStoryTitle = (id: string, newTitle: string) => {
-     setStories(prev => prev.map(story =>
-        story.id === id ? { ...story, title: newTitle } : story
-     ));
-  };
-
-  // --- Helper functions for story-specific data ---
-  const getStoryDataKey = useCallback((storyId: string, key: string) => `${LOCAL_STORAGE_STORY_DATA_PREFIX}${storyId}_${key}`, []);
-
-  // Define the generic function signature correctly within useCallback
-  const getStoryData = useCallback(function <T>(storyId: string, key: string, defaultValue: T): T {
-    if (typeof window === 'undefined') return defaultValue; // Guard against SSR localStorage access
-    const dataKey = getStoryDataKey(storyId, key);
-    const storedData = localStorage.getItem(dataKey);
-    if (storedData !== null) { // Check for null explicitly
-      try {
-        return JSON.parse(storedData) as T;
-      } catch (e) {
-        console.error(`Failed to parse story data for key ${dataKey}`, e);
-        localStorage.removeItem(dataKey); // Clear corrupted data
-        return defaultValue;
-      }
-    }
-    return defaultValue;
-  }, [getStoryDataKey]);
-
-  // Define the generic function signature correctly within useCallback
-  const setStoryData = useCallback(function <T>(storyId: string, key: string, value: T) {
-    if (typeof window === 'undefined') return; // Guard against SSR localStorage access
-    const dataKey = getStoryDataKey(storyId, key);
+  const addStory = useCallback(async (title: string): Promise<Story> => {
     try {
-        localStorage.setItem(dataKey, JSON.stringify(value));
-    } catch (e) {
-        console.error(`Failed to save story data for key ${dataKey}`, e);
-        // Handle potential storage quota errors?
-    }
-  }, [getStoryDataKey]);
+      const response = await fetch('/api/stories/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      if (!response.ok) {
+        throw new Error((await response.json()).error || 'Failed to create story');
+      }
+      const newStoryData = await response.json();
+      const newStory = { ...newStoryData, createdAt: new Date(newStoryData.createdAt).getTime() };
 
-   const deleteStoryData = useCallback((storyId: string, key: string) => {
-     if (typeof window === 'undefined') return; // Guard against SSR localStorage access
-     const dataKey = getStoryDataKey(storyId, key);
-     localStorage.removeItem(dataKey);
-   }, [getStoryDataKey]);
+      // Pre-create directory (fire and forget, errors handled in API)
+      fetch('/api/create-story-directory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storyId: newStory.id }),
+      }).catch(err => console.error("Error pre-creating directory:", err));
+
+      setStories(prev => [newStory, ...prev]); // Add to start of list
+      setActiveStoryId(newStory.id); // Activate new story
+      return newStory;
+    } catch (error) {
+      console.error("Error adding story:", error);
+      throw error; // Re-throw for the caller to handle
+    }
+  }, [setActiveStoryId]);
+
+  const deleteStory = useCallback(async (id: string): Promise<void> => {
+    try {
+      const response = await fetch(`/api/stories/delete?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error((await response.json()).error || 'Failed to delete story');
+      }
+      setStories(prev => prev.filter(story => story.id !== id));
+      if (activeStoryId === id) {
+        setActiveStoryId(null);
+      }
+    } catch (error) {
+      console.error("Error deleting story:", error);
+      throw error;
+    }
+  }, [activeStoryId, setActiveStoryId]);
+
+  const updateStoryTitle = useCallback(async (id: string, newTitle: string): Promise<void> => {
+     try {
+        const response = await fetch('/api/stories/update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, title: newTitle }),
+        });
+        if (!response.ok) {
+            throw new Error((await response.json()).error || 'Failed to update story title');
+        }
+        const updatedStoryData = await response.json();
+        const updatedStory = { ...updatedStoryData, createdAt: new Date(updatedStoryData.createdAt).getTime() };
+        setStories(prev => prev.map(story =>
+            story.id === id ? updatedStory : story
+        ));
+     } catch (error) {
+        console.error("Error updating story title:", error);
+        throw error;
+     }
+  }, []);
+
+  // Expose fetchStories as refreshStories
+  const refreshStories = fetchStories;
 
   // Memoize the context value
   const contextValue = useMemo(() => ({
@@ -140,10 +153,18 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
     addStory,
     deleteStory,
     updateStoryTitle,
-    getStoryData, // Pass the function reference
-    setStoryData, // Pass the function reference
-    deleteStoryData
-  }), [stories, activeStoryId, setActiveStoryId, addStory, deleteStory, updateStoryTitle, getStoryData, setStoryData, deleteStoryData]); // Include all dependencies
+    refreshStories,
+    isLoadingStories,
+    // Remove localStorage helpers
+    // getStoryData,
+    // setStoryData,
+    // deleteStoryData
+  }), [
+      stories, activeStoryId, setActiveStoryId, addStory, deleteStory,
+      updateStoryTitle, refreshStories, isLoadingStories
+      // Remove localStorage helpers from dependencies
+      // getStoryData, setStoryData, deleteStoryData
+  ]);
 
   return (
     <StoryContext.Provider value={contextValue}>
@@ -157,5 +178,7 @@ export const useStoryContext = (): StoryContextType => {
   if (context === undefined) {
     throw new Error('useStoryContext must be used within a StoryProvider');
   }
-  return context;
+  // We need to cast because the removed functions are still in the type
+  // A better approach would be to define a separate internal type
+  return context as StoryContextType;
 };

@@ -9,21 +9,19 @@ import { useStoryContext } from '@/context/StoryContext';
 
 // Define keys for story-specific data (used for localStorage chat history key)
 const STORY_DATA_KEYS = {
-  WORLD_DESCRIPTION: 'world_description',
-  CHARACTER_PROFILES: 'character_profiles',
   CHARACTER_CHAT_HISTORY: 'character_chat_history',
-  NUM_CHARACTERS: 'num_characters',
 };
 
-// Define filenames for backend storage
+// Define filenames (used for saving)
 const FILENAMES = {
     WORLD_DESCRIPTION: 'world.md', // Need to load this
     CHARACTER_PROFILES: 'characters.md',
-    NUM_CHARACTERS: 'num_characters.txt', // Store number as text
+    NUM_CHARACTERS: 'num_characters.txt',
 }
 
 export default function CharacterCreationPage() {
-  const { activeStoryId, getStoryData, setStoryData } = useStoryContext(); // Keep set/get for chat history
+  // Remove getStoryData from context destructuring
+  const { activeStoryId } = useStoryContext();
   const router = useRouter();
 
   const [worldDescription, setWorldDescription] = useState<string>('');
@@ -62,15 +60,35 @@ export default function CharacterCreationPage() {
     const loadInitialData = async () => {
       if (activeStoryId) {
         setIsLoadingData(true);
-        const [loadedWorld, loadedProfiles, loadedNumCharsStr] = await Promise.all([
-            loadDataFromFile(FILENAMES.WORLD_DESCRIPTION),
-            loadDataFromFile(FILENAMES.CHARACTER_PROFILES),
-            loadDataFromFile(FILENAMES.NUM_CHARACTERS, '3') // Default to '3' if file not found
-        ]);
-        setWorldDescription(loadedWorld);
-        setCharacterProfiles(loadedProfiles);
-        setNumCharacters(parseInt(loadedNumCharsStr, 10) || 3); // Parse number, default to 3 on error
-        setIsLoadingData(false);
+        try {
+          // Fetch world description (needed for chat context)
+           const worldResponse = await fetch(`/api/story-data/world?storyId=${encodeURIComponent(activeStoryId)}`);
+           if (worldResponse.ok) {
+               const worldData = await worldResponse.json();
+               setWorldDescription(worldData.description ?? '');
+           } else if (worldResponse.status !== 404) { // Ignore 404, means no world data yet
+               console.error(`Error loading world description: ${worldResponse.statusText}`);
+           }
+
+          // Fetch character data
+          const response = await fetch(`/api/story-data/characters?storyId=${encodeURIComponent(activeStoryId)}`);
+          if (!response.ok) {
+            if (response.status === 404) { // Story exists but no character data yet
+              setCharacterProfiles('');
+              setNumCharacters(3);
+            } else {
+              throw new Error(`Failed to fetch character data: ${response.statusText}`);
+            }
+          } else {
+            const data = await response.json();
+            setCharacterProfiles(data.profiles ?? '');
+            setNumCharacters(data.numCharacters ?? 3);
+          }
+        } catch (error) {
+            console.error("Error loading character data:", error);
+        } finally {
+            setIsLoadingData(false);
+        }
       } else {
           setWorldDescription('');
           setCharacterProfiles('');
@@ -79,13 +97,13 @@ export default function CharacterCreationPage() {
       }
     };
     loadInitialData();
-  }, [activeStoryId, loadDataFromFile]);
+  }, [activeStoryId, loadDataFromFile]); // Added loadDataFromFile dependency
 
   // --- Finalization Logic ---
   const { complete, isLoading: isFinalizationLoading, error: finalizationError } = useCompletion({
     api: '/api/ai-writer/characters/finalize',
     onFinish: (_, finalCompletion) => {
-       setCharacterProfiles(finalCompletion); // Update state, save happens on proceed
+       setCharacterProfiles(finalCompletion); // Update state only
        setIsFinalizing(false);
     },
     onError: (err) => {
@@ -96,11 +114,16 @@ export default function CharacterCreationPage() {
 
   const handleFinalize = useCallback(async () => {
     if (!activeStoryId) return;
+    // Read chat history directly from localStorage
     const chatHistoryKey = `shadowquill_story_data_${activeStoryId}_${STORY_DATA_KEYS.CHARACTER_CHAT_HISTORY}`;
-    const historyToFinalize = getStoryData<Message[]>(activeStoryId, chatHistoryKey, []);
+    let historyToFinalize: Message[] = [];
+    const storedHistory = localStorage.getItem(chatHistoryKey);
+     if (storedHistory) {
+       try { historyToFinalize = JSON.parse(storedHistory); } catch (e) { console.error("Failed to parse chat history", e); }
+     }
 
     if (historyToFinalize.length === 0) { alert('Chat history is empty.'); return; }
-    if (!worldDescription) { alert('World Description is missing.'); return; }
+    if (!worldDescription) { alert('World Description context is missing.'); return; }
 
     setIsFinalizing(true);
     await complete('', { body: {
@@ -108,34 +131,32 @@ export default function CharacterCreationPage() {
         worldContext: worldDescription,
         numCharacters: numCharacters
     }});
-  }, [activeStoryId, worldDescription, numCharacters, complete, getStoryData]);
+  }, [activeStoryId, worldDescription, numCharacters, complete]);
 
-  // Save & Proceed Handler
+  // Save & Proceed Handler - Saves to DB via API
   const handleSaveAndProceed = async () => {
       if (!activeStoryId) return;
       setIsSaving(true);
       try {
-        const savePromises = [
-          fetch('/api/save-file', {
-            method: 'POST',
+        const response = await fetch('/api/story-data/characters', {
+            method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storyId: activeStoryId, filename: FILENAMES.CHARACTER_PROFILES, content: characterProfiles }),
-          }),
-           fetch('/api/save-file', { // Save num characters as well
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ storyId: activeStoryId, filename: FILENAMES.NUM_CHARACTERS, content: String(numCharacters) }),
-          })
-        ];
-        const responses = await Promise.all(savePromises);
-        for (const response of responses) {
-            if (!response.ok) throw new Error((await response.json()).error || 'Failed to save one or more files');
+            body: JSON.stringify({
+                storyId: activeStoryId,
+                profiles: characterProfiles,
+                numCharacters: numCharacters
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error((await response.json()).error || 'Failed to save character data');
         }
-        console.log('Character profiles and count saved to files successfully.');
+
+        console.log('Character data saved to database successfully.');
         router.push('/outline');
       } catch (error: any) {
-        console.error('Error saving character data files:', error);
-        alert(`Error saving files: ${error.message}`);
+        console.error('Error saving character data:', error);
+        alert(`Error saving character data: ${error.message}`);
       } finally {
         setIsSaving(false);
       }
@@ -147,7 +168,7 @@ export default function CharacterCreationPage() {
 
   return (
     <StageLayout>
-       {!worldDescription && activeStoryId && (
+       {!worldDescription && activeStoryId && !isLoadingData && (
          <div className="mb-4 p-4 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-md">
            <strong>Warning:</strong> World Description not found for this story. Please complete Stage 1 first.
          </div>
@@ -166,7 +187,7 @@ export default function CharacterCreationPage() {
               onChange={(e) => setNumCharacters(Math.max(1, parseInt(e.target.value, 10) || 1))}
               min="1"
               className="w-20 p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-              disabled={!activeStoryId || isSaving || isFinalizing}
+              disabled={!activeStoryId || isSaving || isFinalizing || isLoadingData}
             />
           </div>
 
@@ -183,7 +204,7 @@ export default function CharacterCreationPage() {
 
           <button
             onClick={handleFinalize}
-            disabled={!activeStoryId || isFinalizing || isFinalizationLoading || !worldDescription}
+            disabled={!activeStoryId || isFinalizing || isFinalizationLoading || !worldDescription || isLoadingData}
             className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
           >
             {isFinalizing || isFinalizationLoading ? 'Finalizing...' : `Finalize ${numCharacters} Character Profiles`}
@@ -202,12 +223,12 @@ export default function CharacterCreationPage() {
             placeholder="The finalized character profiles will appear here after generation..."
             rows={25}
             className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-            readOnly={!activeStoryId || isFinalizing || isFinalizationLoading || isSaving}
+            readOnly={!activeStoryId || isFinalizing || isFinalizationLoading || isSaving || isLoadingData}
           />
            <button
-            onClick={handleSaveAndProceed} // Use new handler
+            onClick={handleSaveAndProceed}
             className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-            disabled={!activeStoryId || isSaving || isFinalizing || isFinalizationLoading || !characterProfiles}
+            disabled={!activeStoryId || isSaving || isFinalizing || isFinalizationLoading || !characterProfiles || isLoadingData}
           >
             {isSaving ? 'Saving...' : 'Save & Proceed to Outline'}
           </button>
