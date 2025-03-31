@@ -52,7 +52,7 @@ export default function WriteChapterPage() {
   // UI states
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  // Removed compilation states
+  const [isCompiling, setIsCompiling] = useState<boolean>(false); // Added for compilation state
 
   // Redirect if no active story
   useEffect(() => {
@@ -318,7 +318,28 @@ export default function WriteChapterPage() {
      }
   };
 
-  // Removed Compile Manuscript Function
+  // --- Compile Manuscript Function ---
+  const handleCompileBook = async () => {
+    if (!activeStoryId) {
+      alert('No active story selected.');
+      return;
+    }
+    setIsCompiling(true);
+    try {
+      // Construct the URL for the GET request
+      const compileUrl = `/api/compile-book?storyId=${encodeURIComponent(activeStoryId)}`;
+      // Navigate to the URL to trigger download
+      window.location.href = compileUrl;
+      // Note: We can't easily track download completion client-side this way.
+      // The button will re-enable after a short delay.
+      setTimeout(() => setIsCompiling(false), 3000); // Re-enable after 3 seconds
+    } catch (error: any) {
+      console.error("Error initiating book compilation:", error);
+      alert(`Failed to start book compilation: ${error.message}`);
+      setIsCompiling(false);
+    }
+  };
+  // --- End Compile Manuscript Function ---
 
   return (
     <StageLayout>
@@ -359,6 +380,19 @@ export default function WriteChapterPage() {
              </ul>
            ) : (
              <p className="text-gray-500">{activeStoryId ? 'No chapters found or outline empty/invalid.' : 'Select a story first.'}</p>
+           )}
+           {/* Add Compile Button Below Chapter List */}
+           {activeStoryId && parsedChapters.length > 0 && (
+             <div className="mt-6">
+                <button
+                  onClick={handleCompileBook}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                  disabled={isCompiling || isLoadingData}
+                  title="Compile world, characters, outline, and all chapters into a downloadable Markdown (.md) file"
+                >
+                  {isCompiling ? 'Compiling...' : 'Compile & Download Markdown'}
+                </button>
+             </div>
            )}
         </div>
 
