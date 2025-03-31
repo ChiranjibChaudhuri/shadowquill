@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import Link from 'next/link';
-// Removed Image import as we'll use standard <img>
+import { StoryProvider } from '@/context/StoryContext'; // Import the provider
 import './globals.css';
 
 const geistSans = Geist({
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 // Simple Header component with navigation
 const AppHeader = () => {
   const navItems = [
-    { href: '/', label: 'Home' },
+    { href: '/stories', label: 'My Stories' }, // Add link to stories page
     { href: '/world', label: '1. World' },
     { href: '/characters', label: '2. Characters' },
     { href: '/outline', label: '3. Outline' },
@@ -67,14 +67,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col`}
       >
-        <AppHeader /> {/* Add the header */}
-        <main className="flex-grow container mx-auto px-4 py-8"> {/* Added container styling to main */}
-          {children}
-        </main>
-        {/* Optional: Add a footer */}
-        <footer className="text-center p-4 text-xs text-gray-500">
-            Shadowquill &copy; {new Date().getFullYear()}
-        </footer>
+        <StoryProvider> {/* Wrap with StoryProvider */}
+          <AppHeader /> {/* Add the header */}
+          <main className="flex-grow container mx-auto px-4 py-8"> {/* Added container styling to main */}
+            {children}
+          </main>
+          {/* Optional: Add a footer */}
+          <footer className="text-center p-4 text-xs text-gray-500">
+              Shadowquill &copy; {new Date().getFullYear()}
+          </footer>
+        </StoryProvider>
       </body>
     </html>
   );

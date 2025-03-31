@@ -2,22 +2,20 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 
-// Define the base directory for saving files relative to the project root
-// IMPORTANT: Ensure this directory exists or handle its creation.
-// Saving directly into 'public' might have deployment implications.
-const SAVE_DIRECTORY = path.resolve(process.cwd(), 'public', 'ai-writer-output');
+const BASE_OUTPUT_DIRECTORY = path.resolve(process.cwd(), 'public', 'ai-writer-output');
 
 interface SaveFileRequestBody {
+  storyId: string; // Add storyId
   filename: string;
   content: string;
 }
 
 export async function POST(req: Request) {
   try {
-    const { filename, content }: SaveFileRequestBody = await req.json();
+    const { storyId, filename, content }: SaveFileRequestBody = await req.json();
 
-    if (!filename || typeof content === 'undefined') {
-      return NextResponse.json({ error: 'Missing filename or content' }, { status: 400 });
+    if (!storyId || !filename || typeof content === 'undefined') {
+      return NextResponse.json({ error: 'Missing storyId, filename, or content' }, { status: 400 });
     }
 
     // Basic sanitization to prevent path traversal
@@ -25,14 +23,31 @@ export async function POST(req: Request) {
     if (safeFilename !== filename) {
         return NextResponse.json({ error: 'Invalid filename' }, { status: 400 });
     }
+    // Basic sanitization for storyId
+    const safeStoryId = storyId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (!safeStoryId) {
+         return NextResponse.json({ error: 'Invalid storyId resulting in empty directory name' }, { status: 400 });
+    }
 
-    const filePath = path.join(SAVE_DIRECTORY, safeFilename);
+    // Create base story-specific directory path
+    const storyDirectory = path.join(BASE_OUTPUT_DIRECTORY, safeStoryId);
 
-    // Ensure the directory exists
+    // Determine the final file path (inside 'chapters' subdir if filename starts with 'chapter_')
+    let filePath: string;
+    let directoryToEnsure: string;
+    if (safeFilename.startsWith('chapter_')) {
+        directoryToEnsure = path.join(storyDirectory, 'chapters');
+        filePath = path.join(directoryToEnsure, safeFilename);
+    } else {
+        directoryToEnsure = storyDirectory;
+        filePath = path.join(directoryToEnsure, safeFilename);
+    }
+
+    // Ensure the target directory exists
     try {
-        await fs.mkdir(SAVE_DIRECTORY, { recursive: true });
+        await fs.mkdir(directoryToEnsure, { recursive: true });
     } catch (dirError: any) {
-        // Ignore error if directory already exists, otherwise rethrow
+        // Ignore error if directory already exists, otherwise re-throw
         if (dirError.code !== 'EEXIST') {
             throw dirError;
         }
@@ -43,6 +58,7 @@ export async function POST(req: Request) {
     await fs.writeFile(filePath, content, 'utf8');
 
     console.log(`File saved successfully: ${filePath}`);
+    // Return the server path, not the web path, as it's just confirmation
     return NextResponse.json({ message: 'File saved successfully', path: filePath });
 
   } catch (error: any) {

@@ -1,89 +1,167 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 import { type Message, useCompletion } from 'ai/react';
 import StageLayout from '@/components/StageLayout';
 import ChatInterface from '@/components/ChatInterface';
+import { useStoryContext } from '@/context/StoryContext';
 
-const LOCAL_STORAGE_KEYS = {
-  WORLD_TOPIC: 'shadowquill_world_topic',
-  WORLD_DESCRIPTION: 'shadowquill_world_description',
-  WORLD_CHAT_HISTORY: 'shadowquill_world_chat_history',
+// Define keys for story-specific data (used for localStorage chat history key)
+const STORY_DATA_KEYS = {
+  WORLD_TOPIC: 'world_topic',
+  WORLD_DESCRIPTION: 'world_description',
+  WORLD_CHAT_HISTORY: 'world_chat_history',
 };
 
+// Define filenames for backend storage
+const FILENAMES = {
+    WORLD_TOPIC: 'topic.txt', // Simple text file for topic
+    WORLD_DESCRIPTION: 'world.md',
+}
+
 export default function WorldBuildingPage() {
+  const { activeStoryId, setStoryData, getStoryData } = useStoryContext(); // Keep set/get for chat history for now
+  const router = useRouter();
+
   const [topic, setTopic] = useState<string>('');
   const [worldDescription, setWorldDescription] = useState<string>('');
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(true); // Loading state
   const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false); // State for save button loading
-  const router = useRouter(); // Initialize router
-  // Removed chatHistory state, ChatInterface manages its own history via localStorageKey
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // Load initial state from local storage (excluding chat history)
+  // Redirect if no active story
   useEffect(() => {
-    setTopic(localStorage.getItem(LOCAL_STORAGE_KEYS.WORLD_TOPIC) || '');
-    setWorldDescription(localStorage.getItem(LOCAL_STORAGE_KEYS.WORLD_DESCRIPTION) || '');
-    // Chat history is loaded internally by ChatInterface
-  }, []);
-
-  // Save topic and description state to local storage whenever it changes
-  useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEYS.WORLD_TOPIC, topic);
-  }, [topic]);
-
-  useEffect(() => {
-    // Only save description if it's not empty, prevents overwriting loaded data on mount
-    if (worldDescription) {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.WORLD_DESCRIPTION, worldDescription);
+    if (!activeStoryId) {
+      router.replace('/stories');
     }
-  }, [worldDescription]);
+  }, [activeStoryId, router]);
+
+  // Function to fetch data from backend file
+  const loadDataFromFile = useCallback(async (filename: string, defaultValue: string = '') => {
+    if (!activeStoryId) return defaultValue;
+    try {
+        const response = await fetch(`/api/read-story-file?storyId=${encodeURIComponent(activeStoryId)}&filename=${encodeURIComponent(filename)}`);
+        if (!response.ok) {
+            // If file not found (404), return default. Otherwise, log error.
+            if (response.status !== 404) {
+                 console.error(`Error loading ${filename}: ${response.statusText}`);
+            }
+            return defaultValue;
+        }
+        const data = await response.json();
+        return data.content || defaultValue;
+    } catch (error) {
+        console.error(`Error fetching ${filename}:`, error);
+        return defaultValue;
+    }
+  }, [activeStoryId]);
+
+  // Load initial state from backend files when activeStoryId is available
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (activeStoryId) {
+        setIsLoadingData(true);
+        const [loadedTopic, loadedDescription] = await Promise.all([
+            loadDataFromFile(FILENAMES.WORLD_TOPIC),
+            loadDataFromFile(FILENAMES.WORLD_DESCRIPTION)
+        ]);
+        setTopic(loadedTopic);
+        setWorldDescription(loadedDescription);
+        setIsLoadingData(false);
+        // Chat history still loaded by ChatInterface via localStorageKey for now
+      } else {
+          // Clear state if no active story
+          setTopic('');
+          setWorldDescription('');
+          setIsLoadingData(false);
+      }
+    };
+    loadInitialData();
+  }, [activeStoryId, loadDataFromFile]);
+
+  // --- We no longer save directly to context/localStorage on change ---
+  // --- Saving now happens explicitly via the "Save & Proceed" button ---
 
   // --- Finalization Logic ---
-  const { complete, completion, isLoading: isFinalizationLoading, error: finalizationError } = useCompletion({
+  const { complete, isLoading: isFinalizationLoading, error: finalizationError } = useCompletion({
     api: '/api/ai-writer/world/finalize',
     onFinish: (_, finalCompletion) => {
+      // Update state, but don't automatically save here. User must click Save & Proceed.
       setWorldDescription(finalCompletion);
       setIsFinalizing(false);
-      // Optionally clear chat history after finalization?
-      // setChatHistory([]);
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.WORLD_CHAT_HISTORY);
     },
     onError: (err) => {
         console.error("Finalization error:", err);
         setIsFinalizing(false);
-        // Display error to user?
     }
   });
 
   const handleFinalize = useCallback(async () => {
-    // Read the latest chat history directly from local storage
-    const storedHistory = localStorage.getItem(LOCAL_STORAGE_KEYS.WORLD_CHAT_HISTORY);
-    let historyToFinalize: Message[] = [];
-    if (storedHistory) {
-      try {
-        historyToFinalize = JSON.parse(storedHistory);
-      } catch (e) {
-        console.error("Failed to parse chat history for finalization", e);
-        alert("Error reading chat history. Cannot finalize.");
-        return;
-      }
-    }
+    if (!activeStoryId) return;
+    // Read chat history from localStorage via context helper (temporary)
+    const chatHistoryKey = `shadowquill_story_data_${activeStoryId}_${STORY_DATA_KEYS.WORLD_CHAT_HISTORY}`;
+    const historyToFinalize = getStoryData<Message[]>(activeStoryId, chatHistoryKey, []); // Using getStoryData as a proxy for localStorage access
 
     if (historyToFinalize.length === 0) {
       alert('Chat history is empty. Please chat with the AI first.');
       return;
     }
+    if (!topic.trim()) {
+        alert('Please enter a topic/genre first.');
+        return;
+    }
 
     setIsFinalizing(true);
-    // Pass the retrieved chat history and topic to the finalization API
     await complete('', { body: { messages: historyToFinalize, topic } });
-  }, [topic, complete]);
+  }, [activeStoryId, topic, complete, getStoryData]); // Added getStoryData dependency
 
-  // ChatInterface now handles its own state persistence via localStorageKey
+  // Save & Proceed Handler
+  const handleSaveAndProceed = async () => {
+      if (!activeStoryId) return;
+      setIsSaving(true);
+      try {
+        // Save Topic and Description to files
+        const savePromises = [
+          fetch('/api/save-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storyId: activeStoryId, filename: FILENAMES.WORLD_TOPIC, content: topic }),
+          }),
+          fetch('/api/save-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storyId: activeStoryId, filename: FILENAMES.WORLD_DESCRIPTION, content: worldDescription }),
+          })
+        ];
+
+        const responses = await Promise.all(savePromises);
+
+        for (const response of responses) {
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to save one or more files');
+            }
+        }
+
+        console.log('World topic and description saved to files successfully.');
+        // Navigate to next stage
+        router.push('/characters');
+      } catch (error: any) {
+        console.error('Error saving world data files:', error);
+        alert(`Error saving files: ${error.message}`);
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+  // Display loading indicator
+  if (isLoadingData && activeStoryId) {
+      return <StageLayout><div>Loading story data...</div></StageLayout>;
+  }
 
   return (
-    <StageLayout> {/* Removed title prop */}
+    <StageLayout>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Left Side: Chat and Controls */}
         <div>
@@ -96,25 +174,29 @@ export default function WorldBuildingPage() {
               id="topic"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-            placeholder="e.g., High Fantasy Adventure, Sci-Fi Space Opera"
-            className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-          />
-        </div>
+              placeholder="e.g., High Fantasy Adventure, Sci-Fi Space Opera"
+              className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              disabled={!activeStoryId || isSaving || isFinalizing}
+            />
+          </div>
 
-        <ChatInterface
-          apiEndpoint="/api/ai-writer/world/chat"
-          title="Brainstorm World Ideas"
-          placeholder="Describe your initial world ideas or ask questions..."
-          systemPromptContext={{ topic }}
-          localStorageKey={LOCAL_STORAGE_KEYS.WORLD_CHAT_HISTORY} // Pass the key
-          // initialMessages prop removed - component loads internally
-        />
+          {activeStoryId && (
+            <ChatInterface
+              apiEndpoint="/api/ai-writer/world/chat"
+              title="Brainstorm World Ideas"
+              placeholder="Describe your initial world ideas or ask questions..."
+              systemPromptContext={{ topic }}
+              // Chat history still uses localStorage directly via this key
+              localStorageKey={`shadowquill_story_data_${activeStoryId}_${STORY_DATA_KEYS.WORLD_CHAT_HISTORY}`}
+              storyId={activeStoryId}
+            />
+          )}
 
-        <button
-          onClick={handleFinalize} // Reads history from local storage now
-          disabled={isFinalizing || isFinalizationLoading || !topic} // Also disable if no topic
-          className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
-        >
+          <button
+            onClick={handleFinalize}
+            disabled={!activeStoryId || isFinalizing || isFinalizationLoading || !topic.trim()}
+            className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+          >
             {isFinalizing || isFinalizationLoading ? 'Finalizing...' : 'Finalize World Description'}
           </button>
            {finalizationError && (
@@ -131,40 +213,12 @@ export default function WorldBuildingPage() {
             placeholder="The finalized world description will appear here after generation..."
             rows={25}
             className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-            readOnly={isFinalizing || isFinalizationLoading || isSaving} // Disable textarea while saving
+            readOnly={!activeStoryId || isFinalizing || isFinalizationLoading || isSaving}
           />
            <button
-            onClick={async () => {
-              setIsSaving(true);
-              // 1. Save to local storage (redundant due to useEffect, but explicit)
-              localStorage.setItem(LOCAL_STORAGE_KEYS.WORLD_DESCRIPTION, worldDescription);
-
-              // 2. Save to file via API
-              try {
-                const response = await fetch('/api/save-file', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    filename: 'world.md', // Define the filename
-                    content: worldDescription
-                  }),
-                });
-                if (!response.ok) {
-                  const errorData = await response.json();
-                  throw new Error(errorData.error || 'Failed to save file');
-                }
-                console.log('World description saved to file successfully.');
-                // 3. Navigate to next stage
-                router.push('/characters');
-              } catch (error: any) {
-                console.error('Error saving world description file:', error);
-                alert(`Error saving file: ${error.message}`);
-              } finally {
-                setIsSaving(false);
-              }
-            }}
-            className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" // Updated styles for consistency
-            disabled={isSaving || isFinalizing || isFinalizationLoading || !worldDescription} // Disable while saving/finalizing or if no description
+            onClick={handleSaveAndProceed} // Use the new handler
+            className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+            disabled={!activeStoryId || isSaving || isFinalizing || isFinalizationLoading || !worldDescription}
           >
             {isSaving ? 'Saving...' : 'Save & Proceed to Characters'}
           </button>

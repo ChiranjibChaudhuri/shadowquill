@@ -10,6 +10,7 @@ interface ChatInterfaceProps {
   placeholder?: string;
   title: string;
   localStorageKey: string; // Key to save/load chat history
+  storyId: string | null; // Add storyId prop
   onStreamComplete?: (finalAssistantMessage: string) => void;
 }
 
@@ -20,9 +21,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   placeholder = 'Ask questions or give instructions...',
   title,
   localStorageKey, // Receive the key
+  storyId, // Receive storyId
   onStreamComplete
 }) => {
-  // Load initial messages from local storage if available
+  // Load initial messages from local storage if available and storyId is present
   const [loadedInitialMessages, setLoadedInitialMessages] = useState<Message[]>(initialMessages);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localStorageKey]); // Run only when key changes (effectively once on mount)
+  }, [localStorageKey, storyId]); // Also depend on storyId
 
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, error, setMessages } = useChat({
@@ -78,17 +80,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
     // Save messages to local storage whenever they change
-    // Avoid saving the initial default empty array if nothing was loaded
-    if (messages.length > 0 || localStorage.getItem(localStorageKey)) {
+    // Avoid saving if no storyId or if messages are empty and nothing was loaded
+    if (storyId && (messages.length > 0 || localStorage.getItem(localStorageKey))) {
        localStorage.setItem(localStorageKey, JSON.stringify(messages));
     }
-  }, [messages, localStorageKey]);
+  }, [messages, localStorageKey, storyId]); // Add storyId dependency
 
   // Function to clear chat history and local storage
   const clearChat = useCallback(() => {
-    setMessages([]);
-    localStorage.removeItem(localStorageKey);
-  }, [setMessages, localStorageKey]);
+    if (storyId) { // Only clear if there's an active story
+        setMessages([]);
+        localStorage.removeItem(localStorageKey);
+    }
+  }, [setMessages, localStorageKey, storyId]); // Add storyId dependency
 
   return (
     <div className="border rounded-lg p-4 shadow-sm flex flex-col h-[600px] bg-white dark:bg-gray-800">
