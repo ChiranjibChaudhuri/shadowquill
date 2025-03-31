@@ -10,16 +10,7 @@ import { useStoryContext } from '@/context/StoryContext';
 // Define keys for story-specific data (used for localStorage chat history key)
 const STORY_DATA_KEYS = {
   OUTLINE_CHAT_HISTORY: 'outline_chat_history',
-  // PARSED_CHAPTERS: 'parsed_chapters', // No longer using localStorage for this
 };
-
-// Define filenames for backend storage
-const FILENAMES = {
-    WORLD_DESCRIPTION: 'world.md',
-    CHARACTER_PROFILES: 'characters.md',
-    OUTLINE: 'outline.md',
-    NUM_CHAPTERS: 'num_chapters.txt',
-}
 
 // Define structure for parsed chapters
 interface Chapter {
@@ -55,23 +46,6 @@ export default function OutlineCreationPage() {
     }
   }, [activeStoryId, router]);
 
-  // Function to fetch data from backend file
-  const loadDataFromFile = useCallback(async (filename: string, defaultValue: string = '') => {
-    if (!activeStoryId) return defaultValue;
-    try {
-        const response = await fetch(`/api/read-story-file?storyId=${encodeURIComponent(activeStoryId)}&filename=${encodeURIComponent(filename)}`);
-        if (!response.ok) {
-            if (response.status !== 404) console.error(`Error loading ${filename}: ${response.statusText}`);
-            return defaultValue;
-        }
-        const data = await response.json();
-        return data.content || defaultValue;
-    } catch (error) {
-        console.error(`Error fetching ${filename}:`, error);
-        return defaultValue;
-    }
-  }, [activeStoryId]);
-
   // --- Parsing Logic ---
   const parseOutline = useCallback((outlineText: string): Chapter[] => {
     const chapters: Chapter[] = [];
@@ -98,25 +72,32 @@ export default function OutlineCreationPage() {
     return chapters;
   }, []);
 
-  // Load initial state from backend files
+  // Load initial state from DB via API
   useEffect(() => {
     const loadInitialData = async () => {
       if (activeStoryId) {
         setIsLoadingData(true);
         try {
-            const [loadedWorld, loadedChars, loadedOutline, loadedNumStr] = await Promise.all([
-                loadDataFromFile(FILENAMES.WORLD_DESCRIPTION),
-                loadDataFromFile(FILENAMES.CHARACTER_PROFILES),
-                loadDataFromFile(FILENAMES.OUTLINE),
-                loadDataFromFile(FILENAMES.NUM_CHAPTERS, '10')
-            ]);
-            setWorldDescription(loadedWorld);
-            setCharacterProfiles(loadedChars);
-            setOutline(loadedOutline);
-            setNumChapters(parseInt(loadedNumStr, 10) || 10);
-            setParsedChapters(parseOutline(loadedOutline)); // Parse loaded outline
+          // Fetch world, characters, and outline data
+          const [worldData, charData, outlineData] = await Promise.all([
+            fetch(`/api/story-data/world?storyId=${encodeURIComponent(activeStoryId)}`).then(res => res.ok ? res.json() : { description: '' }),
+            fetch(`/api/story-data/characters?storyId=${encodeURIComponent(activeStoryId)}`).then(res => res.ok ? res.json() : { profiles: '' }),
+            fetch(`/api/story-data/outline?storyId=${encodeURIComponent(activeStoryId)}`).then(res => res.ok ? res.json() : { outline: '', numChapters: 10 })
+          ]);
+
+          setWorldDescription(worldData.description ?? '');
+          setCharacterProfiles(charData.profiles ?? '');
+          setOutline(outlineData.outline ?? '');
+          setNumChapters(outlineData.numChapters ?? 10);
+          setParsedChapters(parseOutline(outlineData.outline ?? ''));
+
         } catch (error) {
             console.error("Error loading outline page data:", error);
+            setWorldDescription('');
+            setCharacterProfiles('');
+            setOutline('');
+            setNumChapters(10);
+            setParsedChapters([]);
         } finally {
             setIsLoadingData(false);
         }
@@ -130,11 +111,10 @@ export default function OutlineCreationPage() {
       }
     };
     loadInitialData();
-  }, [activeStoryId, loadDataFromFile, parseOutline]);
+  }, [activeStoryId, parseOutline]); // Removed loadDataFromFile
 
   // Re-parse outline whenever outline text changes
   useEffect(() => {
-    // No need to check activeStoryId, as outline state is local
     const chapters = parseOutline(outline);
     setParsedChapters(chapters);
   }, [outline, parseOutline]);
@@ -177,7 +157,7 @@ export default function OutlineCreationPage() {
       if (!activeStoryId) return;
       setIsSaving(true);
       try {
-        const response = await fetch('/api/story-data/outline', {
+        const response = await fetch('/api/story-data/outline', { // Use DB API
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
