@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react'; // Import useMemo
 import { useRouter } from 'next/navigation';
 import { type Message, useCompletion } from 'ai/react';
 // import { readStreamableValue } from 'ai/rsc'; // Not needed for streamText response handling
@@ -20,6 +20,12 @@ import ReactFlow, {
   type Edge,
   type OnConnect,
   type FitViewOptions,
+  // Needed for state/handlers
+  type NodeChange,
+  type EdgeChange,
+  type Connection,
+  type Viewport,
+  type ReactFlowInstance,
 } from 'reactflow';
 
 import 'reactflow/dist/style.css';
@@ -50,17 +56,21 @@ const fitViewOptions: FitViewOptions = { padding: 0.2 };
 interface MindMapComponentProps {
   nodes: Node[];
   edges: Edge[];
-  onNodesChange: (changes: any) => void; // Adjust type as needed
-  onEdgesChange: (changes: any) => void; // Adjust type as needed
-  onConnect: OnConnect;
-  setRfInstance: (instance: any) => void;
+  onNodesChange: (changes: NodeChange[]) => void; // Use specific type
+  onEdgesChange: (changes: EdgeChange[]) => void; // Use specific type
+  onConnect: (connection: Connection) => void; // Use specific type
+  onNodeClick: (event: React.MouseEvent, node: Node) => void;
+  onNodeDoubleClick: (event: React.MouseEvent, node: Node) => void; // Add double click handler prop
+  setRfInstance: (instance: ReactFlowInstance | null) => void; // Use specific type
   addNode: () => void;
   handleSaveMindMap: () => Promise<void>;
   activeStoryId: string | null;
   isLoadingData: boolean;
   isSavingMindMap: boolean;
   isGeneratingMindMap: boolean;
-  // Add missing props needed inside the component
+  isAddingEdge: boolean;
+  toggleAddEdgeMode: () => void;
+  sourceNodeForEdge: string | null;
   handleGenerateMindMap: () => Promise<void>;
   worldDescription: string;
   characterProfiles: string;
@@ -72,35 +82,75 @@ const MindMapInnerComponent: React.FC<MindMapComponentProps> = ({
   nodes, edges, onNodesChange, onEdgesChange, onConnect, setRfInstance,
   addNode, handleSaveMindMap, handleGenerateMindMap,
   activeStoryId, isLoadingData, isSavingMindMap, isGeneratingMindMap,
-  worldDescription, characterProfiles, outline
+  isAddingEdge, toggleAddEdgeMode, sourceNodeForEdge,
+  worldDescription, characterProfiles, outline,
+  onNodeClick, onNodeDoubleClick // Destructure double click handler
 }) => {
+
+  // Highlight source node when adding edge
+  const highlightedNodes = useMemo(() => {
+    if (!isAddingEdge || !sourceNodeForEdge) return nodes;
+    return nodes.map(node => {
+      if (node.id === sourceNodeForEdge) {
+        // Apply highlighting style
+        return { ...node, style: { ...node.style, border: '2px solid red', boxShadow: '0 0 5px red' } };
+      }
+      // Ensure non-highlighted nodes don't retain the style if source changes
+      return { ...node, style: { ...node.style, border: undefined, boxShadow: undefined } };
+    });
+  }, [nodes, isAddingEdge, sourceNodeForEdge]);
+
+
   return (
     <div style={{ height: '600px' }} className="border rounded-md relative bg-gray-50 dark:bg-gray-800">
       <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onConnect={onConnect}
+        nodes={highlightedNodes} // Use highlighted nodes
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick} // Add double click handler
         onInit={setRfInstance}
         fitView
         fitViewOptions={fitViewOptions} // Use the constant object
         className="bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-800 dark:via-gray-900 dark:to-black"
       >
-      <Controls />
-      <MiniMap nodeStrokeWidth={3} zoomable pannable />
-      <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
-    </ReactFlow>
-    {/* Add Node Button */}
-    <button
-      onClick={addNode}
-      className="absolute bottom-4 left-4 z-10 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-3 rounded text-sm shadow"
-      disabled={!activeStoryId || isLoadingData || isSavingMindMap || isGeneratingMindMap}
-    >
-      + Add Node
-    </button>
-    {/* Generate Initial Map Button - Uses destructured props now */}
-    <button
+        <Controls />
+        <MiniMap nodeStrokeWidth={3} zoomable pannable />
+        <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+      </ReactFlow>
+      {/* Buttons Container */}
+      <div className="absolute bottom-4 left-4 z-10 flex space-x-2">
+        {/* Add Node Button */}
+        <button
+          onClick={addNode}
+          className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-3 rounded text-sm shadow"
+          disabled={!activeStoryId || isLoadingData || isSavingMindMap || isGeneratingMindMap || isAddingEdge}
+          title={isAddingEdge ? "Finish adding edge first" : "Add a new node"}
+        >
+          + Add Node
+        </button>
+        {/* Add Edge Button */}
+        <button
+          onClick={toggleAddEdgeMode}
+          className={`font-semibold py-1 px-3 rounded text-sm shadow ${isAddingEdge ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-purple-500 hover:bg-purple-600 text-white'}`}
+          disabled={!activeStoryId || isLoadingData || isSavingMindMap || isGeneratingMindMap}
+        >
+          {isAddingEdge ? (sourceNodeForEdge ? 'Select Target Node' : 'Select Source Node (Click Cancel to exit)') : '+ Add Edge'}
+        </button>
+         {isAddingEdge && (
+            <button
+                onClick={toggleAddEdgeMode} // Re-use toggle to cancel
+                className="bg-gray-400 hover:bg-gray-500 text-white font-semibold py-1 px-3 rounded text-sm shadow"
+                title="Cancel adding edge"
+            >
+                Cancel
+            </button>
+         )}
+      </div>
+      {/* Generate Initial Map Button - Uses destructured props now */}
+      <button
       onClick={handleGenerateMindMap}
       className="absolute top-4 left-4 z-10 bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-1 px-3 rounded text-sm shadow disabled:opacity-50"
       disabled={!activeStoryId || isLoadingData || isSavingMindMap || isGeneratingMindMap || !worldDescription || !characterProfiles || !outline}
@@ -149,7 +199,9 @@ function OutlineCreationPageContent() {
   const [isSavingMindMap, setIsSavingMindMap] = useState<boolean>(false);
   const [isGeneratingMindMap, setIsGeneratingMindMap] = useState<boolean>(false); // Added
   const [generationError, setGenerationError] = useState<string | null>(null); // Added
-  const [rfInstance, setRfInstance] = useState<any>(null);
+  const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null); // Use specific type
+  const [isAddingEdge, setIsAddingEdge] = useState<boolean>(false); // State for edge adding mode
+  const [sourceNodeForEdge, setSourceNodeForEdge] = useState<string | null>(null); // State for source node ID
 
   // Redirect if no active story
   useEffect(() => {
@@ -287,9 +339,17 @@ function OutlineCreationPageContent() {
   // Save & Proceed Handler
   const handleSaveAndProceed = async () => {
       if (!activeStoryId) return;
+      console.log("handleSaveAndProceed called"); // Log start
       setIsSaving(true);
+      let mindMapSaved = false;
+      let outlineSaved = false;
       try {
+        console.log("Attempting to save mind map...");
         await handleSaveMindMap(); // Always save mind map
+        mindMapSaved = true; // Assume success if no error thrown
+        console.log("Mind map save completed successfully.");
+
+        console.log("Attempting to save outline text...");
         const outlineResponse = await fetch('/api/story-data/outline', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -299,15 +359,32 @@ function OutlineCreationPageContent() {
                 numChapters: numChapters
             }),
         });
+
         if (!outlineResponse.ok) {
-            throw new Error((await outlineResponse.json()).error || 'Failed to save outline data');
+            const errorBody = await outlineResponse.text(); // Get raw error body
+            console.error("Outline save failed. Status:", outlineResponse.status, "Body:", errorBody);
+            throw new Error(`Failed to save outline data: ${outlineResponse.statusText}`);
         }
-        console.log('Outline data saved to database successfully.');
-        router.push('/write');
+
+        const outlineResult = await outlineResponse.json(); // Parse JSON only if response is ok
+        outlineSaved = true; // Mark as saved successfully
+        console.log('Outline data saved to database successfully:', outlineResult);
+
+        // Only navigate if both saves were successful
+        if (mindMapSaved && outlineSaved) {
+            console.log("Both saves successful. Attempting navigation to /write...");
+            router.push('/write');
+            console.log("Navigation to /write requested."); // Log after push request
+        } else {
+             console.log("One or both save operations failed. Navigation skipped.");
+        }
+
       } catch (error: any) {
+        // This catch block will now catch errors from handleSaveMindMap OR the outline fetch
         console.error('Error saving data and proceeding:', error);
-        alert(`Error saving data: ${error.message}`);
+        alert(`Error saving data: ${error.message}`); // Show specific error
       } finally {
+        console.log("handleSaveAndProceed finished."); // Log end
         setIsSaving(false);
       }
   };
@@ -321,33 +398,95 @@ function OutlineCreationPageContent() {
   const handleSaveMindMap = useCallback(async () => {
     if (!activeStoryId) return;
     setIsSavingMindMap(true);
+    console.log("Saving mind map data..."); // Log start of save
     try {
-        const flowData = { nodes, edges };
+        // Get current viewport from instance to save it
+        const viewport = rfInstance?.getViewport();
+        const flowData = { nodes, edges, viewport }; // Include viewport
         const response = await fetch('/api/story-data/mindmap', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ storyId: activeStoryId, mindMapData: flowData }),
         });
         if (!response.ok) {
-            throw new Error((await response.json()).error || 'Failed to save mind map data');
+            const errorBody = await response.text();
+            console.error("Mind map save failed. Status:", response.status, "Body:", errorBody);
+            throw new Error(`Failed to save mind map data: ${response.statusText}`); // Re-throw to be caught by caller
         }
-        console.log('Mind map data saved successfully.');
+        const result = await response.json();
+        console.log('Mind map data saved successfully:', result);
     } catch (error: any) {
         console.error('Error saving mind map data:', error);
-        alert(`Error saving mind map: ${error.message}`);
+        alert(`Error saving mind map: ${error.message}`); // Show alert specifically for mind map save error
+        throw error; // Re-throw error so handleSaveAndProceed knows it failed
     } finally {
         setIsSavingMindMap(false);
+        console.log("Mind map save finished."); // Log end of save
+     }
+   }, [activeStoryId, nodes, edges, rfInstance]); // Add rfInstance dependency
+
+  // Toggle edge adding mode
+  const toggleAddEdgeMode = useCallback(() => {
+    setIsAddingEdge(prev => !prev);
+    setSourceNodeForEdge(null); // Reset source node when toggling mode
+  }, []);
+
+  // Handle node clicks for edge creation
+  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+    if (!isAddingEdge) return; // Do nothing if not in edge adding mode
+
+    if (!sourceNodeForEdge) {
+      // First click: set source node
+      setSourceNodeForEdge(node.id);
+    } else if (sourceNodeForEdge !== node.id) { // Prevent self-connection
+      // Second click: create edge and exit mode
+      const edgeId = `edge_${sourceNodeForEdge}-${node.id}_${Date.now()}`;
+      const newEdge: Edge = { id: edgeId, source: sourceNodeForEdge, target: node.id, type: 'default' /* or custom */ };
+      setEdges((eds) => addEdge(newEdge, eds));
+      setSourceNodeForEdge(null);
+      setIsAddingEdge(false);
     }
-  }, [activeStoryId, nodes, edges]);
+    // If clicking the same node again, do nothing (or could cancel source selection)
+  }, [isAddingEdge, sourceNodeForEdge, setEdges]);
+
+  // Handle node double-click for editing label
+  const onNodeDoubleClick = useCallback((event: React.MouseEvent, node: Node) => {
+    const currentLabel = node.data.label || '';
+    const newLabel = window.prompt('Enter new node label:', currentLabel);
+
+    if (newLabel !== null && newLabel !== currentLabel) {
+      setNodes((nds) =>
+        nds.map((n) => {
+          if (n.id === node.id) {
+            // it's important to create a new object here, to inform React Flow about the change
+            n.data = { ...n.data, label: newLabel };
+          }
+          return n;
+        })
+      );
+    }
+  }, [setNodes]);
+
 
   const addNode = useCallback(() => {
+    if (isAddingEdge) return; // Don't add node while adding edge
+    // Get viewport center (or use default if instance not ready)
+    const viewport: Viewport = rfInstance?.getViewport() ?? { x: 0, y: 0, zoom: 1 };
+    // Project viewport center to flow coordinates
+    const position = rfInstance?.project({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+    }) ?? { x: 100, y: 100 }; // Fallback position
+
     const newNodeId = `node_${Date.now()}`;
     const newNode: Node = {
-      id: newNodeId, type: 'default', data: { label: 'New Node' },
-      position: { x: Math.random() * 250, y: Math.random() * 250 },
+      id: newNodeId,
+      type: 'default', // Or use a custom node type if defined
+      data: { label: 'New Node' },
+      position: position, // Use projected position
     };
     setNodes((nds) => nds.concat(newNode));
-  }, [setNodes]);
+  }, [setNodes, rfInstance, isAddingEdge]); // Add rfInstance and isAddingEdge dependency
 
   // Fit view effect
   useEffect(() => {
@@ -396,6 +535,7 @@ function OutlineCreationPageContent() {
             if (parsedData && Array.isArray(parsedData.nodes) && Array.isArray(parsedData.edges)) {
                  const initialNodes = parsedData.nodes.map((node: Node) => ({
                     ...node,
+                    // Ensure position exists, provide default if missing from AI
                     position: node.position || { x: Math.random() * 400, y: Math.random() * 400 },
                  }));
                 setNodes(initialNodes);
@@ -535,6 +675,11 @@ function OutlineCreationPageContent() {
                  isLoadingData={isLoadingData}
                  isSavingMindMap={isSavingMindMap}
                  isGeneratingMindMap={isGeneratingMindMap}
+                 isAddingEdge={isAddingEdge} // Pass state
+                 toggleAddEdgeMode={toggleAddEdgeMode} // Pass handler
+                 sourceNodeForEdge={sourceNodeForEdge} // Pass state
+                 onNodeClick={onNodeClick} // Pass handler
+                 onNodeDoubleClick={onNodeDoubleClick} // Pass handler
                  // Pass context needed for disabling generate button inside MindMapComponent
                  worldDescription={worldDescription}
                  characterProfiles={characterProfiles}

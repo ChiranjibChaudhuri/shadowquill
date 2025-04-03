@@ -180,9 +180,9 @@ PRE-DEFINED SCENES FOR THIS CHAPTER:
 
 Your Task:
 1. Write the complete Chapter {chapterNumber}: "{chapterTitle}".
-2. Use the Chapter Outline/Focus as the primary guide for the chapter's structure and plot progression. Also consider the relationships and structure depicted in the optional Mind Map Context for high-level connections or thematic groupings.
+2. Use **both** the detailed **Chapter Outline/Focus** for the linear sequence of events and the **Mind Map Context** (if provided) for understanding broader structural relationships, character connections, and thematic links as your primary guides for the chapter's structure and plot progression. Ensure the narrative respects both the linear flow and the relational structure.
 3. Incorporate the provided PRE-DEFINED SCENES into the chapter narrative at appropriate points, ensuring smooth transitions and logical flow between the outline points and the scenes. Use the scene content as the core for that part of the chapter, expanding descriptions, internal thoughts, and actions around it naturally to weave it into the broader chapter narrative. If scene content is minimal, rely more on the scene description and chapter outline.
-4. Seamlessly integrate details from the World Context, Character Profiles, and Mind Map Context (if provided). Maintain consistency.
+4. Seamlessly integrate details from the World Context and Character Profiles. Maintain consistency with all provided context (Outline, Mind Map, World, Characters).
 5. Write engaging, immersive, and high-quality prose. Vary sentence structure, use vivid descriptions, craft believable dialogue, and show character emotions and thoughts effectively. Avoid summarizing plot points; show them unfolding through action, dialogue, and description.
 6. Ensure the chapter flows logically from the Previous Chapter Summary (if provided) and sets up the next chapter according to the Book Outline.
 7. Maintain consistent character voices and perspectives as established in the Character Profiles and Book Outline.
@@ -220,8 +220,8 @@ SCENE DESCRIPTION/GOAL:
 
 Your Task:
 1. Write the specific scene described in the Scene Description/Goal.
-2. Ensure the scene fits logically within the context of Chapter {chapterNumber}, the overall Book Outline, and any relevant connections shown in the Mind Map Context (if provided).
-3. Incorporate details from the World Context and Character Profiles naturally. Maintain consistency.
+2. Ensure the scene fits logically within the context of Chapter {chapterNumber}, considering **both** the overall **Book Outline** for sequence and the **Mind Map Context** (if provided) for relational and thematic connections.
+3. Incorporate details from the World Context and Character Profiles naturally. Maintain consistency with all provided context.
 4. Write engaging prose with vivid descriptions, realistic dialogue, clear action, and character introspection relevant to the scene.
 5. Focus on achieving the specific goal outlined in the Scene Description.
 6. Aim for a detailed and complete scene, exploring the moment thoroughly.
@@ -259,9 +259,9 @@ INSTRUCTIONS:
         *   Sequence of major plot events.
         *   Connection between a theme and plot points/characters.
     *   You can optionally add 'label' to edges to describe the relationship (e.g., 'leads to', 'conflicts with', 'loves').
-4.  **Output Format:** The entire response MUST be ONLY the valid JSON object containing the 'nodes' and 'edges' arrays. Do NOT include any introductory text, explanations, comments, or markdown formatting (like \`\`\`json). The response should start directly with `{` and end directly with `}`.
+4.  **Output Format:** The entire response MUST be ONLY the valid JSON object containing the 'nodes' and 'edges' arrays. Do NOT include any introductory text, explanations, comments, or markdown formatting (like \`\`\`json). The response should start directly with \`{\` and end directly with \`}\`.
 
-FINAL INSTRUCTION: Generate ONLY the valid ReactFlow JSON structure based on the provided context. Your entire output must be parsable as a single JSON object.`; // Added semicolon
+FINAL INSTRUCTION: Generate ONLY the valid ReactFlow JSON structure based on the provided context. Your entire output must be parsable as a single JSON object.`;
 
 // Ensure import is correctly placed after the prompt definition
 import type { Message } from 'ai';
