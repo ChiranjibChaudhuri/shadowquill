@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { URL } from 'url';
+import { auth } from '@/auth'; // Import auth helper
+// No need to import URL
 
 // GET handler to fetch chapter data
 export async function GET(req: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const url = new URL(req.url);
     const storyId = url.searchParams.get('storyId');
@@ -17,12 +25,21 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Invalid chapterNumber' }, { status: 400 });
     }
 
-    // TODO: Auth check
+    // First, verify the user owns the story
+    const story = await prisma.story.findUnique({
+        where: { id: storyId, userId: userId },
+        select: { id: true } // Only need to confirm existence and ownership
+    });
 
+    if (!story) {
+        return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
+    }
+
+    // Now fetch the chapter data
     const chapter = await prisma.chapter.findUnique({
       where: {
-        storyId_chapterNumber: { // Use the @@unique constraint name
-          storyId: storyId,
+        storyId_chapterNumber: {
+          storyId: storyId, // Already verified ownership
           chapterNumber: chapterNumber,
         }
       },
@@ -46,11 +63,18 @@ export async function GET(req: Request) {
 interface UpdateChapterDataBody {
     storyId: string;
     chapterNumber: number;
-    content?: string;
-    title?: string; // Allow updating title too if needed
+    content?: string | null; // Allow null
+    title?: string | null; // Allow null
 }
 
 export async function PUT(req: Request) {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const { storyId, chapterNumber, content, title }: UpdateChapterDataBody = await req.json();
 
@@ -58,27 +82,35 @@ export async function PUT(req: Request) {
             return NextResponse.json({ error: 'Missing storyId or valid chapterNumber' }, { status: 400 });
         }
         // Require at least content or title to update
-        if (typeof content === 'undefined' && typeof title === 'undefined') {
+        if (content === undefined && title === undefined) {
              return NextResponse.json({ error: 'Missing data to update (content or title)' }, { status: 400 });
         }
 
-        // TODO: Auth check
+        // Verify user owns the story before upserting
+        const story = await prisma.story.findUnique({
+            where: { id: storyId, userId: userId },
+            select: { id: true } // Only need to confirm existence and ownership
+        });
 
-        const dataToUpdate: { content?: string; title?: string } = {};
-        if (typeof content !== 'undefined') dataToUpdate.content = content;
-        if (typeof title !== 'undefined') dataToUpdate.title = title;
+        if (!story) {
+            return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
+        }
 
-        // Use upsert: update if exists, create if not
+        const dataToUpdate: { content?: string | null; title?: string | null } = {};
+        if (content !== undefined) dataToUpdate.content = content;
+        if (title !== undefined) dataToUpdate.title = title;
+
+        // Use upsert: update if exists, create if not (ownership already verified)
         const upsertedChapter = await prisma.chapter.upsert({
             where: {
                 storyId_chapterNumber: {
-                    storyId: storyId,
+                    storyId: storyId, // Use the verified storyId
                     chapterNumber: chapterNumber,
                 }
             },
             update: dataToUpdate,
             create: {
-                storyId: storyId,
+                storyId: storyId, // Use the verified storyId
                 chapterNumber: chapterNumber,
                 title: title ?? `Chapter ${chapterNumber}`, // Use provided title or default
                 content: content ?? '', // Default to empty content if creating
@@ -90,7 +122,7 @@ export async function PUT(req: Request) {
 
     } catch (error: any) {
         console.error('Error saving chapter data:', error);
-        // Don't need P2025 check because upsert handles creation
+        // Upsert might fail for other reasons, but P2025 shouldn't happen for the story itself here
         return NextResponse.json({ error: 'Failed to save chapter data', details: error.message }, { status: 500 });
     }
 }

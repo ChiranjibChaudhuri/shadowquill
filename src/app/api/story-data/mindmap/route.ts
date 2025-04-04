@@ -1,10 +1,18 @@
 // src/app/api/story-data/mindmap/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { URL } from 'url';
+import { auth } from '@/auth'; // Import auth helper
+// No need to import URL
 
 // GET handler to fetch mind map data
 export async function GET(req: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const url = new URL(req.url);
   const storyId = url.searchParams.get('storyId');
 
@@ -12,16 +20,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Missing storyId query parameter' }, { status: 400 });
   }
 
-  // TODO: Add user authentication check later
-
   try {
     const story = await prisma.story.findUnique({
-      where: { id: storyId },
+      where: {
+        id: storyId,
+        userId: userId, // Check ownership
+      },
       select: { mindMapData: true }, // Only select the mind map data
     });
 
     if (!story) {
-      return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
     }
 
     // Parse the JSON string, default to null if empty or invalid
@@ -46,6 +55,13 @@ export async function GET(req: Request) {
 
 // PUT handler to save mind map data
 export async function PUT(req: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { storyId, mindMapData } = await req.json();
 
@@ -56,8 +72,6 @@ export async function PUT(req: Request) {
         return NextResponse.json({ error: 'Missing mindMapData in request body' }, { status: 400 });
     }
 
-    // TODO: Add user authentication check later
-
     // Validate if mindMapData is a reasonable object structure (basic check)
     if (typeof mindMapData !== 'object' || mindMapData === null) {
          return NextResponse.json({ error: 'Invalid mindMapData format' }, { status: 400 });
@@ -66,8 +80,12 @@ export async function PUT(req: Request) {
     // Stringify the data for storage
     const mindMapDataString = JSON.stringify(mindMapData);
 
+    // Update story only if it belongs to the user
     const updatedStory = await prisma.story.update({
-      where: { id: storyId },
+      where: {
+        id: storyId,
+        userId: userId, // Check ownership
+      },
       data: {
         mindMapData: mindMapDataString,
       },
@@ -79,9 +97,9 @@ export async function PUT(req: Request) {
 
   } catch (error: any) {
     console.error('Error saving mind map data:', error);
-     // Handle specific Prisma error for record not found
+     // Handle specific Prisma error for record not found (means user didn't own it or it didn't exist)
     if (error.code === 'P2025') {
-        return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
     }
     return NextResponse.json({ error: 'Failed to save mind map data', details: error.message }, { status: 500 });
   }
