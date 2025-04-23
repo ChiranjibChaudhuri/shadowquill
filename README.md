@@ -105,3 +105,7 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 ---
 
 *Happy Writing!*
+
+---
+
+**Note:** The `feature/database-persistence` branch contains work in progress to replace `localStorage` and file system storage with a Prisma/SQLite database backend for more robust multi-story persistence. Not all features (like saving/compilation) may be fully functional on this branch yet.

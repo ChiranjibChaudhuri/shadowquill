@@ -12,19 +12,11 @@ const STORY_DATA_KEYS = {
   CHARACTER_CHAT_HISTORY: 'character_chat_history',
 };
 
-// Define filenames (used for saving)
-const FILENAMES = {
-    WORLD_DESCRIPTION: 'world.md', // Need to load this
-    CHARACTER_PROFILES: 'characters.md',
-    NUM_CHARACTERS: 'num_characters.txt',
-}
-
 export default function CharacterCreationPage() {
-  // Remove getStoryData from context destructuring
   const { activeStoryId } = useStoryContext();
   const router = useRouter();
 
-  const [worldDescription, setWorldDescription] = useState<string>('');
+  const [worldDescription, setWorldDescription] = useState<string>(''); // Still needed for context
   const [characterProfiles, setCharacterProfiles] = useState<string>('');
   const [numCharacters, setNumCharacters] = useState<number>(3);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
@@ -38,39 +30,22 @@ export default function CharacterCreationPage() {
     }
   }, [activeStoryId, router]);
 
-  // Function to fetch data from backend file
-  const loadDataFromFile = useCallback(async (filename: string, defaultValue: string = '') => {
-    if (!activeStoryId) return defaultValue;
-    try {
-        const response = await fetch(`/api/read-story-file?storyId=${encodeURIComponent(activeStoryId)}&filename=${encodeURIComponent(filename)}`);
-        if (!response.ok) {
-            if (response.status !== 404) console.error(`Error loading ${filename}: ${response.statusText}`);
-            return defaultValue;
-        }
-        const data = await response.json();
-        return data.content || defaultValue;
-    } catch (error) {
-        console.error(`Error fetching ${filename}:`, error);
-        return defaultValue;
-    }
-  }, [activeStoryId]);
-
-  // Load initial state from backend files
+  // Load initial state from DB via API
   useEffect(() => {
     const loadInitialData = async () => {
       if (activeStoryId) {
         setIsLoadingData(true);
         try {
-          // Fetch world description (needed for chat context)
+          // Fetch world description (needed for chat context) via API
            const worldResponse = await fetch(`/api/story-data/world?storyId=${encodeURIComponent(activeStoryId)}`);
            if (worldResponse.ok) {
                const worldData = await worldResponse.json();
                setWorldDescription(worldData.description ?? '');
-           } else if (worldResponse.status !== 404) { // Ignore 404, means no world data yet
+           } else if (worldResponse.status !== 404) {
                console.error(`Error loading world description: ${worldResponse.statusText}`);
            }
 
-          // Fetch character data
+          // Fetch character data via API
           const response = await fetch(`/api/story-data/characters?storyId=${encodeURIComponent(activeStoryId)}`);
           if (!response.ok) {
             if (response.status === 404) { // Story exists but no character data yet
@@ -85,7 +60,11 @@ export default function CharacterCreationPage() {
             setNumCharacters(data.numCharacters ?? 3);
           }
         } catch (error) {
-            console.error("Error loading character data:", error);
+            console.error("Error loading character page data:", error);
+            // Reset state on error?
+            setWorldDescription('');
+            setCharacterProfiles('');
+            setNumCharacters(3);
         } finally {
             setIsLoadingData(false);
         }
@@ -97,7 +76,7 @@ export default function CharacterCreationPage() {
       }
     };
     loadInitialData();
-  }, [activeStoryId, loadDataFromFile]); // Added loadDataFromFile dependency
+  }, [activeStoryId]); // Removed loadDataFromFile dependency
 
   // --- Finalization Logic ---
   const { complete, isLoading: isFinalizationLoading, error: finalizationError } = useCompletion({
@@ -138,7 +117,7 @@ export default function CharacterCreationPage() {
       if (!activeStoryId) return;
       setIsSaving(true);
       try {
-        const response = await fetch('/api/story-data/characters', {
+        const response = await fetch('/api/story-data/characters', { // Use DB API
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -1,13 +1,14 @@
 'use client';
 
 import React, { createContext, useState, useContext, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { useSession } from 'next-auth/react'; // Import useSession
 
 // Keep Story interface
 interface Story {
   id: string;
   title: string;
   createdAt: number; // Keep timestamp from DB (or Date object)
-  // Add other fields from Prisma schema if needed later
+  userId?: string; // Add userId back as it's returned from API now
 }
 
 interface StoryContextType {
@@ -19,48 +20,89 @@ interface StoryContextType {
   updateStoryTitle: (id: string, newTitle: string) => Promise<void>;
   refreshStories: () => Promise<void>; // Function to manually refresh list
   isLoadingStories: boolean;
-  // Remove localStorage data helpers
-  // getStoryData: <T>(storyId: string, key: string, defaultValue: T) => T;
-  // setStoryData: <T>(storyId: string, key: string, value: T) => void;
-  // deleteStoryData: (storyId: string, key: string) => void;
 }
 
 const StoryContext = createContext<StoryContextType | undefined>(undefined);
 
 // Keep key for active story ID
 const LOCAL_STORAGE_ACTIVE_STORY_KEY = 'shadowquill_active_story_id';
-// Remove other localStorage keys
 
 export const StoryProvider = ({ children }: { children: ReactNode }) => {
+  const { data: session, status: authStatus } = useSession(); // Get session status
   const [stories, setStories] = useState<Story[]>([]);
   const [activeStoryId, setActiveStoryIdState] = useState<string | null>(null);
-  const [isLoadingStories, setIsLoadingStories] = useState<boolean>(true); // Loading state
+  const [isLoadingStories, setIsLoadingStories] = useState<boolean>(true); // Loading state initially true
 
-  // Function to fetch stories from API
+  // Function to fetch stories from API (only if authenticated)
   const fetchStories = useCallback(async () => {
+    // Don't fetch if not authenticated
+    if (authStatus !== 'authenticated') {
+        setStories([]); // Clear stories if not logged in
+        setIsLoadingStories(false);
+        return;
+    }
     setIsLoadingStories(true);
     try {
+      // API route now automatically filters by logged-in user
       const response = await fetch('/api/stories/list');
       if (!response.ok) {
-        throw new Error('Failed to fetch stories');
+        // Handle specific auth error if possible, otherwise generic
+        if (response.status === 401) {
+            console.error("Unauthorized fetch stories request.");
+            // Optionally trigger sign-in or show message
+        } else {
+            throw new Error(`Failed to fetch stories: ${response.statusText}`);
+        }
+        setStories([]); // Clear on error
+      } else {
+        const data = await response.json();
+        // Convert createdAt string from DB to number if needed, or adjust Story interface
+        // Ensure data is an array before mapping
+        if (Array.isArray(data)) {
+            setStories(data.map((story: any) => ({
+                ...story,
+                createdAt: new Date(story.createdAt).getTime()
+            })));
+        } else {
+            console.error("Received non-array data for stories:", data);
+            setStories([]);
+        }
       }
-      const data = await response.json();
-      // Convert createdAt string from DB to number if needed, or adjust Story interface
-      setStories(data.map((story: any) => ({ ...story, createdAt: new Date(story.createdAt).getTime() })));
     } catch (error) {
       console.error("Error fetching stories:", error);
       setStories([]); // Clear stories on error
     } finally {
       setIsLoadingStories(false);
     }
-  }, []);
+  }, [authStatus]); // Depend on authStatus
 
-  // Load stories on mount and active story ID from localStorage
+  // Load stories when authentication status changes to authenticated
+  // Also load active story ID from localStorage on initial mount
   useEffect(() => {
-    fetchStories();
+    if (authStatus === 'authenticated') {
+        console.log("User authenticated, fetching stories...");
+        fetchStories();
+    } else if (authStatus === 'unauthenticated') {
+        console.log("User unauthenticated, clearing stories.");
+        setStories([]); // Clear stories if user logs out
+        setActiveStoryIdState(null); // Clear active story
+        localStorage.removeItem(LOCAL_STORAGE_ACTIVE_STORY_KEY); // Clear stored active ID
+        setIsLoadingStories(false); // Not loading if not authenticated
+    } else {
+        // Status is 'loading'
+        setIsLoadingStories(true);
+    }
+  }, [authStatus, fetchStories]);
+
+  // Load active story ID only once on initial mount
+  useEffect(() => {
     const storedActiveId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_STORY_KEY);
-    setActiveStoryIdState(storedActiveId);
-  }, [fetchStories]); // fetchStories is memoized
+    // Only set if it exists, otherwise keep it null until a story is added/selected
+    if (storedActiveId) {
+        setActiveStoryIdState(storedActiveId);
+    }
+  }, []); // Empty dependency array ensures this runs only once
+
 
   // Save active story ID whenever it changes
   const setActiveStoryId = useCallback((id: string | null) => {
@@ -72,20 +114,33 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // --- API-based CRUD operations ---
+  // --- API-based CRUD operations (now assume user is authenticated) ---
 
   const addStory = useCallback(async (title: string): Promise<Story> => {
+    // No need to check authStatus here, API route will handle it
     try {
       const response = await fetch('/api/stories/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify({ title }), // No userId needed in body
       });
       if (!response.ok) {
-        throw new Error((await response.json()).error || 'Failed to create story');
+        // Attempt to parse error JSON, fallback to text
+        let errorMsg = 'Failed to create story';
+        try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorMsg;
+        } catch {
+            errorMsg = await response.text() || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
       const newStoryData = await response.json();
-      const newStory = { ...newStoryData, createdAt: new Date(newStoryData.createdAt).getTime() };
+      // Ensure createdAt is handled correctly
+      const newStory: Story = {
+          ...newStoryData,
+          createdAt: newStoryData.createdAt ? new Date(newStoryData.createdAt).getTime() : Date.now()
+      };
 
       // Pre-create directory (fire and forget, errors handled in API)
       fetch('/api/create-story-directory', {
@@ -94,7 +149,7 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
           body: JSON.stringify({ storyId: newStory.id }),
       }).catch(err => console.error("Error pre-creating directory:", err));
 
-      setStories(prev => [newStory, ...prev]); // Add to start of list
+      setStories((prev: Story[]) => [newStory, ...prev]); // Add type for prev
       setActiveStoryId(newStory.id); // Activate new story
       return newStory;
     } catch (error) {
@@ -104,14 +159,22 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
   }, [setActiveStoryId]);
 
   const deleteStory = useCallback(async (id: string): Promise<void> => {
+    // API route handles auth and ownership check
     try {
       const response = await fetch(`/api/stories/delete?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
       if (!response.ok) {
-        throw new Error((await response.json()).error || 'Failed to delete story');
+         let errorMsg = 'Failed to delete story';
+         try {
+             const errorData = await response.json();
+             errorMsg = errorData.error || errorMsg;
+         } catch {
+             errorMsg = await response.text() || errorMsg;
+         }
+         throw new Error(errorMsg);
       }
-      setStories(prev => prev.filter(story => story.id !== id));
+      setStories((prev: Story[]) => prev.filter(story => story.id !== id)); // Add type for prev
       if (activeStoryId === id) {
         setActiveStoryId(null);
       }
@@ -122,6 +185,7 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
   }, [activeStoryId, setActiveStoryId]);
 
   const updateStoryTitle = useCallback(async (id: string, newTitle: string): Promise<void> => {
+     // API route handles auth and ownership check
      try {
         const response = await fetch('/api/stories/update', {
             method: 'PUT',
@@ -129,12 +193,23 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
             body: JSON.stringify({ id, title: newTitle }),
         });
         if (!response.ok) {
-            throw new Error((await response.json()).error || 'Failed to update story title');
+            let errorMsg = 'Failed to update story title';
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch {
+                errorMsg = await response.text() || errorMsg;
+            }
+            throw new Error(errorMsg);
         }
         const updatedStoryData = await response.json();
-        const updatedStory = { ...updatedStoryData, createdAt: new Date(updatedStoryData.createdAt).getTime() };
-        setStories(prev => prev.map(story =>
-            story.id === id ? updatedStory : story
+        // Ensure createdAt is handled correctly
+        const updatedStory: Story = {
+            ...updatedStoryData,
+            createdAt: updatedStoryData.createdAt ? new Date(updatedStoryData.createdAt).getTime() : Date.now()
+        };
+        setStories((prev: Story[]) => prev.map(story => // Add type for prev
+            story.id === id ? { ...story, ...updatedStory } : story // Merge updates carefully
         ));
      } catch (error) {
         console.error("Error updating story title:", error);
@@ -155,15 +230,9 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
     updateStoryTitle,
     refreshStories,
     isLoadingStories,
-    // Remove localStorage helpers
-    // getStoryData,
-    // setStoryData,
-    // deleteStoryData
   }), [
       stories, activeStoryId, setActiveStoryId, addStory, deleteStory,
       updateStoryTitle, refreshStories, isLoadingStories
-      // Remove localStorage helpers from dependencies
-      // getStoryData, setStoryData, deleteStoryData
   ]);
 
   return (
@@ -178,7 +247,5 @@ export const useStoryContext = (): StoryContextType => {
   if (context === undefined) {
     throw new Error('useStoryContext must be used within a StoryProvider');
   }
-  // We need to cast because the removed functions are still in the type
-  // A better approach would be to define a separate internal type
-  return context as StoryContextType;
+  return context;
 };

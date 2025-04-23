@@ -69,3 +69,7 @@ lerna-debug.log*
 
 # Generated AI Writer Output
 /public/ai-writer-output/
+
+# Prisma SQLite database
+prisma/dev.db
+prisma/dev.db-journal

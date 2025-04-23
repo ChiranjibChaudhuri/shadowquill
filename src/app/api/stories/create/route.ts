@@ -1,34 +1,33 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth'; // Import auth helper
 
 interface CreateStoryRequestBody {
-  title: string;
-  userId?: string; // Optional: Link to user later
+  title?: string; // Title can be optional, we'll use a default
 }
 
 export async function POST(req: Request) {
-  try {
-    const { title, userId }: CreateStoryRequestBody = await req.json();
+  const session = await auth();
+  const userId = session?.user?.id;
 
-    if (!title || typeof title !== 'string' || title.trim().length === 0) {
-        // Use a default title if none provided or only whitespace
-        const defaultTitle = `Untitled Story ${new Date().getTime()}`; // Simple default
-         console.log(`No title provided, using default: ${defaultTitle}`);
-         const newStory = await prisma.story.create({
-             data: {
-                 title: defaultTitle,
-                 // userId: userId // Add later when auth is implemented
-             },
-         });
-         return NextResponse.json(newStory, { status: 201 });
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const body: CreateStoryRequestBody = await req.json();
+    let title = body.title?.trim();
+
+    // Use a default title if none provided or only whitespace
+    if (!title) {
+        title = `Untitled Story ${new Date().toISOString()}`; // Use ISO string for consistency
+        console.log(`No title provided, using default: ${title}`);
     }
 
-    // TODO: Add user authentication check here later
-    // For now, create story without linking to a user
     const newStory = await prisma.story.create({
       data: {
-        title: title.trim(), // Trim whitespace from provided title
-        // userId: userId // Add later when auth is implemented
+        title: title,
+        userId: userId, // Associate with the logged-in user
       },
     });
 

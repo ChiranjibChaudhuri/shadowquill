@@ -33,21 +33,15 @@ const STORY_DATA_KEYS = {
   CHAPTER_SCENES_PREFIX: 'chapter_scenes_', // Keep for scenes localStorage
 };
 
-// Define filenames for backend storage
-const FILENAMES = {
-    WORLD_DESCRIPTION: 'world.md',
-    CHARACTER_PROFILES: 'characters.md',
-    OUTLINE: 'outline.md',
-}
-
 export default function WriteChapterPage() {
-  const { activeStoryId, stories } = useStoryContext(); // Removed get/setStoryData
+  const { activeStoryId, stories } = useStoryContext();
   const router = useRouter();
 
-  // Context state loaded from files
+  // Context state loaded from DB
   const [worldDescription, setWorldDescription] = useState<string>('');
   const [characterProfiles, setCharacterProfiles] = useState<string>('');
   const [fullOutline, setFullOutline] = useState<string>('');
+  const [mindMapData, setMindMapData] = useState<any>(null); // Added state for mind map data
   const [parsedChapters, setParsedChapters] = useState<Chapter[]>([]);
 
   // Chapter specific state
@@ -59,9 +53,7 @@ export default function WriteChapterPage() {
   // UI states
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [isCompiling, setIsCompiling] = useState<boolean>(false);
-  const [manuscriptMdPath, setManuscriptMdPath] = useState<string | null>(null);
-  const [manuscriptFilename, setManuscriptFilename] = useState<string>('full_manuscript.md');
+  const [isCompiling, setIsCompiling] = useState<boolean>(false); // Added for compilation state
 
   // Redirect if no active story
   useEffect(() => {
@@ -70,7 +62,7 @@ export default function WriteChapterPage() {
     }
   }, [activeStoryId, router]);
 
-  // Function to fetch data from backend file API
+  // Function to fetch data from backend API
   const loadDataFromApi = useCallback(async (endpoint: string, params: Record<string, string>, defaultValue: any = '') => {
     if (!activeStoryId) return defaultValue;
     const queryParams = new URLSearchParams({ storyId: activeStoryId, ...params }).toString();
@@ -80,7 +72,7 @@ export default function WriteChapterPage() {
             if (response.status !== 404) console.error(`Error loading data from ${endpoint}: ${response.statusText}`);
             return defaultValue;
         }
-        return await response.json(); // Return the parsed JSON data
+        return await response.json();
     } catch (error) {
         console.error(`Error fetching data from ${endpoint}:`, error);
         return defaultValue;
@@ -89,7 +81,6 @@ export default function WriteChapterPage() {
 
   // --- Outline Parsing Logic ---
   const parseOutline = useCallback((outlineText: string): Chapter[] => {
-    // ... (parsing logic remains the same)
     const chapters: Chapter[] = [];
     const chapterRegex = /^##\s+Chapter\s+(\d+):\s*(.*)$/gm;
     let match;
@@ -114,31 +105,42 @@ export default function WriteChapterPage() {
     return chapters;
   }, []);
 
-  // Load general context from backend files/APIs
+  // Load general context from backend APIs (including Mind Map)
   useEffect(() => {
     const loadGeneralData = async () => {
       if (activeStoryId) {
-        setIsLoadingData(true);
-        const [worldData, charData, outlineData] = await Promise.all([
-            loadDataFromApi('/api/story-data/world', {}),
-            loadDataFromApi('/api/story-data/characters', {}),
-            loadDataFromApi('/api/story-data/outline', {})
-        ]);
-        setWorldDescription(worldData?.description ?? '');
-        setCharacterProfiles(charData?.profiles ?? '');
-        setFullOutline(outlineData?.outline ?? '');
-        setParsedChapters(parseOutline(outlineData?.outline ?? ''));
+        setIsLoadingData(true); // Set loading true at the start
+        try {
+            // Fetch world, characters, outline, and mind map data
+            const [worldData, charData, outlineData, mapData] = await Promise.all([
+                loadDataFromApi('/api/story-data/world', {}),
+                loadDataFromApi('/api/story-data/characters', {}),
+                loadDataFromApi('/api/story-data/outline', {}),
+                loadDataFromApi('/api/story-data/mindmap', {}, { mindMapData: null }) // Fetch mind map data, default null
+            ]);
+            setWorldDescription(worldData?.description ?? '');
+            setCharacterProfiles(charData?.profiles ?? '');
+            setFullOutline(outlineData?.outline ?? '');
+            setMindMapData(mapData?.mindMapData ?? null); // Store mind map data
+            setParsedChapters(parseOutline(outlineData?.outline ?? ''));
+        } catch (error) {
+            console.error("Error loading general story data:", error);
+            setWorldDescription(''); setCharacterProfiles(''); setFullOutline('');
+            setMindMapData(null); setParsedChapters([]);
+        } finally {
+            // Loading state is handled later in the chapter data loading effect
+            // to ensure all context is available before chapter-specific loading starts
+        }
       } else {
-          setWorldDescription('');
-          setCharacterProfiles('');
-          setFullOutline('');
-          setParsedChapters([]);
-          setSelectedChapter(null);
-          setIsLoadingData(false);
+          // Reset all state if no active story
+          setWorldDescription(''); setCharacterProfiles(''); setFullOutline('');
+          setMindMapData(null); setParsedChapters([]); setSelectedChapter(null);
+          setIsLoadingData(false); // Stop loading if no active story
       }
     };
     loadGeneralData();
-  }, [activeStoryId, loadDataFromApi, parseOutline]);
+    // Dependencies now include setMindMapData
+  }, [activeStoryId, loadDataFromApi, parseOutline, setMindMapData]);
 
   // Get localStorage key helper for scenes
   const getChapterScenesKey = useCallback((chapterNumber: number) =>
@@ -152,12 +154,9 @@ export default function WriteChapterPage() {
             setIsLoadingData(true);
             const scenesKey = getChapterScenesKey(selectedChapter.chapterNumber);
 
-            // Use standard localStorage access for scenes
             const getLocalStorageScenes = (key: string, defaultValue: Scene[]): Scene[] => {
                 const storedData = localStorage.getItem(key);
-                 if (storedData !== null) {
-                   try { return JSON.parse(storedData) as Scene[]; } catch (e) { console.error("Parse error for scenes", e); return defaultValue; }
-                 }
+                 if (storedData !== null) { try { return JSON.parse(storedData) as Scene[]; } catch (e) { console.error("Parse error", e); return defaultValue; } }
                  return defaultValue;
             }
 
@@ -175,25 +174,21 @@ export default function WriteChapterPage() {
 
             setIsLoadingData(false);
         } else {
-            setGeneratedContent('');
-            setPreviousChapterContent('');
-            setChapterScenes([]);
-            if (!activeStoryId || (activeStoryId && worldDescription !== undefined)) {
+            setGeneratedContent(''); setPreviousChapterContent(''); setChapterScenes([]);
+            if (!activeStoryId || (activeStoryId && fullOutline !== undefined)) {
                  setIsLoadingData(false);
             }
         }
     };
-    // Ensure general data is loaded before trying to load chapter data
-     if (parsedChapters.length > 0 || !activeStoryId || (activeStoryId && fullOutline !== undefined)) {
+    if (parsedChapters.length > 0 || !activeStoryId || (activeStoryId && fullOutline !== undefined)) {
         loadChapterData();
     }
-  }, [selectedChapter, activeStoryId, loadDataFromApi, getChapterScenesKey, parsedChapters, fullOutline, worldDescription]);
+  }, [selectedChapter, activeStoryId, loadDataFromApi, getChapterScenesKey, parsedChapters, fullOutline]); // Removed worldDescription
 
   // Save scenes to localStorage directly
   useEffect(() => {
     if (selectedChapter && activeStoryId) {
       const scenesKey = getChapterScenesKey(selectedChapter.chapterNumber);
-      // Use standard localStorage access for scenes
       const getLocalStorageScenes = (key: string, defaultValue: Scene[] | null): Scene[] | null => {
           const stored = localStorage.getItem(key);
           if (stored) { try { return JSON.parse(stored); } catch { return defaultValue; } }
@@ -211,13 +206,8 @@ export default function WriteChapterPage() {
   // --- Chapter Generation Logic ---
   const { complete, isLoading: isGenerating, error: generationError } = useCompletion({
     api: '/api/ai-writer/chapter/generate',
-    onFinish: (_, finalCompletion) => {
-      setGeneratedContent(finalCompletion); // Update state only
-    },
-    onError: (err) => {
-      console.error("Chapter generation error:", err);
-      setGeneratedContent(`Error generating chapter: ${err.message}`);
-    }
+    onFinish: (_, finalCompletion) => { setGeneratedContent(finalCompletion); },
+    onError: (err) => { console.error("Chapter generation error:", err); setGeneratedContent(`Error: ${err.message}`); }
   });
 
   // --- Scene Generation Logic ---
@@ -231,41 +221,113 @@ export default function WriteChapterPage() {
     }
   });
 
-  // Scene Management Functions (remain the same)
-  const addScene = () => { /* ... */ };
-  const updateScene = (id: string, field: 'description' | 'content', value: string) => { /* ... */ };
-  const deleteScene = (id: string) => { /* ... */ };
-  const handleGenerateScene = async (sceneId: string) => { /* ... */ };
+  // Scene Management Functions
+  const addScene = () => {
+    const newScene: Scene = { id: Date.now().toString(), description: '', content: '' };
+    setChapterScenes(prevScenes => [...prevScenes, newScene]);
+  };
+  const updateScene = (id: string, field: 'description' | 'content', value: string) => {
+    setChapterScenes(prevScenes => prevScenes.map(scene =>
+      scene.id === id ? { ...scene, [field]: value } : scene
+    ));
+  };
+  const deleteScene = (id: string) => {
+    setChapterScenes(prevScenes => prevScenes.filter(scene => scene.id !== id));
+  };
+  const handleGenerateScene = async (sceneId: string) => {
+    const sceneToGenerate = chapterScenes.find(s => s.id === sceneId);
+    if (!sceneToGenerate || !selectedChapter || !sceneToGenerate.description.trim() || !activeStoryId) return;
+    // Check for mind map data as well if needed (optional context)
+    if (!worldDescription || !characterProfiles || !fullOutline) { alert('Missing required context (World, Characters, Outline).'); return; }
 
-  // Chapter Generation Function (remains the same)
-  const handleGenerateChapter = useCallback(async () => { /* ... */ }, [/* ... */]);
+    setChapterScenes(prevScenes => prevScenes.map(scene =>
+      scene.id === sceneId ? { ...scene, isGenerating: true, content: 'Generating...' } : scene
+    ));
+    const sceneIndex = chapterScenes.findIndex(s => s.id === sceneId);
+    const previousContextForScene = sceneIndex > 0 ? chapterScenes[sceneIndex - 1].content : 'Start of the chapter.';
+
+    try {
+      const finalCompletion = await completeScene('', {
+        body: {
+          worldContext: worldDescription,
+          characterContext: characterProfiles,
+          outlineContext: fullOutline,
+          mindMapContext: mindMapData ? JSON.stringify(mindMapData) : null, // Pass mind map data
+          previousContext: previousContextForScene,
+          chapterNumber: selectedChapter.chapterNumber,
+          chapterTitle: selectedChapter.title,
+          chapterOutline: selectedChapter.rawContent,
+          sceneDescription: sceneToGenerate.description,
+        }
+      });
+      if (finalCompletion) {
+        setChapterScenes(prevScenes => prevScenes.map(scene =>
+          scene.id === sceneId ? { ...scene, content: finalCompletion, isGenerating: false } : scene
+        ));
+      } else {
+         setChapterScenes(prevScenes => prevScenes.map(scene =>
+           scene.id === sceneId ? { ...scene, content: scene.content.startsWith('Error:') ? scene.content : 'Generation failed.', isGenerating: false } : scene
+         ));
+      }
+    } catch (error) {
+       console.error("Error in handleGenerateScene:", error);
+       setChapterScenes(prevScenes => prevScenes.map(scene =>
+         scene.id === sceneId ? { ...scene, content: `Error: ${(error as Error).message}`, isGenerating: false } : scene
+       ));
+    }
+  };
+
+  // Chapter Generation Function
+  const handleGenerateChapter = useCallback(async () => {
+    if (!selectedChapter || !activeStoryId) { alert('Please select a chapter.'); return; }
+    // Check for mind map data as well (optional context)
+    if (!worldDescription || !characterProfiles || !fullOutline) { alert('Missing required context (World, Characters, Outline).'); return; }
+    if (chapterScenes.length === 0) { alert('Please add and generate at least one scene first.'); return; }
+
+    const formattedScenes = chapterScenes.map((scene, index) =>
+        `Scene ${index + 1} Description: ${scene.description}\nScene ${index + 1} Content:\n${scene.content}`
+      ).join('\n\n---\n\n');
+
+    await complete('', { body: {
+      worldContext: worldDescription,
+      characterContext: characterProfiles,
+      outlineContext: fullOutline,
+      mindMapContext: mindMapData ? JSON.stringify(mindMapData) : null, // Pass mind map data
+      previousChapterContext: previousChapterContent,
+      chapterNumber: selectedChapter.chapterNumber,
+      chapterTitle: selectedChapter.title,
+      chapterOutline: selectedChapter.rawContent,
+      chapterScenes: formattedScenes
+    }});
+    // Dependencies now include mindMapData
+  }, [selectedChapter, activeStoryId, worldDescription, characterProfiles, fullOutline, mindMapData, previousChapterContent, chapterScenes, complete]);
 
   // Save and Proceed Function - Saves chapter content to DB via API
   const handleSaveAndProceed = async () => {
      if (!selectedChapter || !activeStoryId) return;
      setIsSaving(true);
      try {
-       const response = await fetch('/api/story-data/chapter', { // Use chapter data API
+       const response = await fetch('/api/story-data/chapter', {
          method: 'PUT',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({
              storyId: activeStoryId,
              chapterNumber: selectedChapter.chapterNumber,
-             title: selectedChapter.title, // Pass title in case it needs creation
+             title: selectedChapter.title,
              content: generatedContent
          }),
        });
        if (!response.ok) throw new Error((await response.json()).error || 'Failed to save chapter data');
        console.log(`Chapter ${selectedChapter.chapterNumber} saved to database successfully.`);
 
-       // Save scenes to localStorage (still using this)
+       // Save scenes to localStorage
        const scenesKey = getChapterScenesKey(selectedChapter.chapterNumber);
        localStorage.setItem(scenesKey, JSON.stringify(chapterScenes));
 
        const isLastChapter = selectedChapter.chapterNumber === parsedChapters.length;
        if (isLastChapter) {
-          alert('Last chapter saved! You can now compile the full manuscript.');
-          setManuscriptMdPath(null);
+          alert('Last chapter saved! Manuscript is complete (in database).');
+          // No compilation UI needed here anymore
        } else {
          const nextChapterIndex = parsedChapters.findIndex(chap => chap.chapterNumber === selectedChapter.chapterNumber + 1);
          if (nextChapterIndex !== -1) setSelectedChapter(parsedChapters[nextChapterIndex]);
@@ -278,14 +340,32 @@ export default function WriteChapterPage() {
      }
   };
 
-  // Compile Manuscript Function (remains the same)
-  const handleCompile = async () => { /* ... */ };
-
+  // --- Compile Manuscript Function ---
+  const handleCompileBook = async () => {
+    if (!activeStoryId) {
+      alert('No active story selected.');
+      return;
+    }
+    setIsCompiling(true);
+    try {
+      // Construct the URL for the GET request
+      const compileUrl = `/api/compile-book?storyId=${encodeURIComponent(activeStoryId)}`;
+      // Navigate to the URL to trigger download
+      window.location.href = compileUrl;
+      // Note: We can't easily track download completion client-side this way.
+      // The button will re-enable after a short delay.
+      setTimeout(() => setIsCompiling(false), 3000); // Re-enable after 3 seconds
+    } catch (error: any) {
+      console.error("Error initiating book compilation:", error);
+      alert(`Failed to start book compilation: ${error.message}`);
+      setIsCompiling(false);
+    }
+  };
+  // --- End Compile Manuscript Function ---
 
   return (
     <StageLayout>
-      {/* ... (rest of the JSX remains largely the same) ... */}
-       {!activeStoryId && (
+      {!activeStoryId && (
          <div className="mb-4 p-4 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-md">
            Please select or create a story from the <a href="/stories" className="font-bold underline">Stories page</a> to begin.
          </div>
@@ -322,6 +402,19 @@ export default function WriteChapterPage() {
              </ul>
            ) : (
              <p className="text-gray-500">{activeStoryId ? 'No chapters found or outline empty/invalid.' : 'Select a story first.'}</p>
+           )}
+           {/* Add Compile Button Below Chapter List */}
+           {activeStoryId && parsedChapters.length > 0 && (
+             <div className="mt-6">
+                <button
+                  onClick={handleCompileBook}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
+                  disabled={isCompiling || isLoadingData}
+                  title="Compile world, characters, outline, and all chapters into a downloadable Markdown (.md) file"
+                >
+                  {isCompiling ? 'Compiling...' : 'Compile & Download Markdown'}
+                </button>
+             </div>
            )}
         </div>
 
@@ -366,21 +459,8 @@ export default function WriteChapterPage() {
                </div>
                 {/* --- End Full Chapter Generation Section --- */}
 
-               {/* Display compile button/link after last chapter is saved */}
-               {selectedChapter.chapterNumber === parsedChapters.length && !isSaving && (
-                 <div className="mt-6 border-t pt-4">
-                   <h3 className="text-lg font-semibold mb-2">Manuscript Compilation</h3>
-                   {!manuscriptMdPath ? (
-                     <button onClick={handleCompile} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" disabled={!activeStoryId || isCompiling}>{isCompiling ? 'Compiling...' : 'Compile Full Manuscript (.md)'}</button>
-                   ) : (
-                     <div className="text-center space-y-3">
-                       <p className="text-green-700 dark:text-green-400">Manuscript compiled!</p>
-                       <a href={manuscriptMdPath} download={manuscriptFilename} className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Download Manuscript (.md)</a>
-                        <button onClick={() => setManuscriptMdPath(null)} className="ml-4 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">Recompile</button>
-                     </div>
-                   )}
-                 </div>
-               )}
+               {/* Removed Manuscript Compilation Section */}
+
             </div>
           ) : (
              <div className="flex items-center justify-center h-full text-gray-500">

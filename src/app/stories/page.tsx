@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useStoryContext } from '@/context/StoryContext'; // Still use context for activeStoryId and list state
+import { useStoryContext } from '@/context/StoryContext';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // Keep Link
+import Link from 'next/link';
+import { useSession, signIn } from 'next-auth/react'; // Import useSession and signIn
 
 // Keep Story interface from context or redefine if context is removed later
 interface Story {
@@ -13,10 +14,11 @@ interface Story {
 }
 
 export default function StoriesPage() {
-  // Get state management functions from context, but CRUD ops will use API
+  const { data: session, status: authStatus } = useSession(); // Get auth status
+  // Get state management functions from context
   const { activeStoryId, setActiveStoryId } = useStoryContext();
   const [stories, setStories] = useState<Story[]>([]); // Local state for stories list
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Combined loading state
   const [newStoryTitle, setNewStoryTitle] = useState('');
   const [editingStoryId, setEditingStoryId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -25,14 +27,30 @@ export default function StoriesPage() {
   const [isDeleting, setIsDeleting] = useState<string | null>(null); // Store ID being deleted
   const router = useRouter();
 
-  // Fetch stories from API on mount
+  // Fetch stories from API on mount or when auth status changes to authenticated
   const fetchStories = useCallback(async () => {
-    setIsLoading(true);
+    // Only fetch if authenticated
+    if (authStatus !== 'authenticated') {
+        setStories([]);
+        setIsLoading(false); // Not loading if not authenticated
+        return;
+    }
+    setIsLoading(true); // Set loading true when fetching starts
     try {
-      const response = await fetch('/api/stories/list');
-      if (!response.ok) throw new Error('Failed to fetch stories');
-      const data = await response.json();
-      setStories(data.map((story: any) => ({ ...story, createdAt: new Date(story.createdAt).getTime() })));
+      const response = await fetch('/api/stories/list'); // API handles user filtering
+      if (!response.ok) {
+          if (response.status === 401) {
+              // Handle unauthorized - maybe prompt sign in?
+              console.error("Unauthorized to fetch stories.");
+          } else {
+              throw new Error('Failed to fetch stories');
+          }
+          setStories([]); // Clear stories on error
+      } else {
+          const data = await response.json();
+          // Add type annotation for story in map
+          setStories(data.map((story: Story) => ({ ...story, createdAt: new Date(story.createdAt).getTime() })));
+      }
     } catch (error) {
       console.error("Error fetching stories:", error);
       alert(`Error fetching stories: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -40,21 +58,25 @@ export default function StoriesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [authStatus]); // Depend on authStatus
 
   useEffect(() => {
     fetchStories();
-  }, [fetchStories]);
+  }, [fetchStories]); // fetchStories is memoized with authStatus dependency
 
   // --- API Call Handlers ---
 
   const handleAddStory = async () => {
+    if (authStatus !== 'authenticated') {
+        signIn(); // Prompt sign in if not authenticated
+        return;
+    }
     setIsCreating(true);
     try {
       const response = await fetch('/api/stories/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newStoryTitle.trim() || `Untitled Story ${new Date().getTime()}` }), // Send trimmed title or default
+        body: JSON.stringify({ title: newStoryTitle.trim() || `Untitled Story ${new Date().toISOString()}` }),
       });
       if (!response.ok) throw new Error((await response.json()).error || 'Failed to create story');
       const newStoryData = await response.json();
@@ -67,7 +89,8 @@ export default function StoriesPage() {
           body: JSON.stringify({ storyId: newStory.id }),
       }).catch(err => console.error("Error pre-creating directory:", err));
 
-      setStories(prev => [newStory, ...prev.sort((a, b) => b.createdAt - a.createdAt)]); // Add and re-sort
+      // Add type annotation for prev and sort parameters
+      setStories((prev: Story[]) => [newStory, ...prev].sort((a: Story, b: Story) => b.createdAt - a.createdAt));
       setActiveStoryId(newStory.id); // Activate new story
       setNewStoryTitle('');
       router.push('/world'); // Navigate after creation
@@ -81,16 +104,19 @@ export default function StoriesPage() {
   };
 
   const handleSelectStory = (id: string) => {
+    if (authStatus !== 'authenticated') return; // Should not be possible if list isn't shown
     setActiveStoryId(id);
     router.push('/world');
   };
 
   const handleStartEdit = (story: Story) => {
+    if (authStatus !== 'authenticated') return;
     setEditingStoryId(story.id);
     setEditTitle(story.title);
   };
 
   const handleSaveEdit = async (id: string) => {
+    if (authStatus !== 'authenticated') return;
     if (!editTitle.trim()) return; // Don't save empty title
     setIsUpdating(true);
     try {
@@ -102,7 +128,8 @@ export default function StoriesPage() {
         if (!response.ok) throw new Error((await response.json()).error || 'Failed to update title');
         const updatedStoryData = await response.json();
         const updatedStory = { ...updatedStoryData, createdAt: new Date(updatedStoryData.createdAt).getTime() };
-        setStories(prev => prev.map(story => story.id === id ? updatedStory : story));
+        // Add type annotation for prev and story
+        setStories((prev: Story[]) => prev.map((story: Story) => story.id === id ? updatedStory : story));
     } catch (error) {
         console.error("Error updating title:", error);
         alert(`Error updating title: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -114,12 +141,14 @@ export default function StoriesPage() {
   };
 
   const handleDeleteStory = async (id: string) => {
+      if (authStatus !== 'authenticated') return;
       if (confirm('Are you sure you want to delete this story and all its data? This cannot be undone.')) {
           setIsDeleting(id); // Set deleting state for specific story
           try {
               const response = await fetch(`/api/stories/delete?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
               if (!response.ok) throw new Error((await response.json()).error || 'Failed to delete story');
-              setStories(prev => prev.filter(story => story.id !== id));
+              // Add type annotation for prev and story
+              setStories((prev: Story[]) => prev.filter((story: Story) => story.id !== id));
               if (activeStoryId === id) setActiveStoryId(null);
           } catch (error) {
               console.error("Error deleting story:", error);
@@ -130,6 +159,31 @@ export default function StoriesPage() {
       }
   }
 
+  // Handle loading and unauthenticated states
+  if (authStatus === 'loading' || isLoading) {
+      return (
+          <div className="container mx-auto px-4 py-8 text-center">
+              <p>Loading...</p>
+          </div>
+      );
+  }
+
+  if (authStatus === 'unauthenticated') {
+       return (
+          <div className="container mx-auto px-4 py-8 text-center">
+              <h1 className="text-3xl font-bold mb-6">My Stories</h1>
+              <p className="mb-4">Please sign in to view and manage your stories.</p>
+              <button
+                onClick={() => signIn()}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              >
+                Sign In
+              </button>
+          </div>
+      );
+  }
+
+  // Render page content only if authenticated
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">My Stories</h1>
@@ -159,13 +213,11 @@ export default function StoriesPage() {
       {/* List Stories */}
       <div>
         <h2 className="text-2xl font-semibold mb-4">Existing Stories</h2>
-        {isLoading ? (
-            <p>Loading stories...</p>
-        ) : stories.length === 0 ? (
+        {stories.length === 0 ? (
           <p className="text-gray-500">You haven't created any stories yet.</p>
         ) : (
           <ul className="space-y-4">
-            {stories.map((story) => (
+            {stories.map((story: Story) => ( // Add type annotation here
               <li key={story.id} className={`p-4 border rounded-lg bg-white dark:bg-gray-800 shadow flex justify-between items-center ${isDeleting === story.id ? 'opacity-50' : ''}`}>
                 {editingStoryId === story.id ? (
                   <div className="flex-grow flex gap-2 items-center">

@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { URL } from 'url';
+import { auth } from '@/auth'; // Import auth helper
+// No need to import URL, it's a global constructor
 
 // GET handler to fetch world data for a story
 export async function GET(req: Request) {
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
+    // Use the global URL constructor
     const url = new URL(req.url);
     const storyId = url.searchParams.get('storyId');
 
@@ -12,10 +21,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Missing storyId query parameter' }, { status: 400 });
     }
 
-    // TODO: Add user authentication check
-
+    // Fetch story only if it belongs to the user
     const story = await prisma.story.findUnique({
-      where: { id: storyId },
+      where: {
+        id: storyId,
+        userId: userId, // Check ownership
+      },
       select: {
         worldTopic: true,
         worldDescription: true,
@@ -23,7 +34,8 @@ export async function GET(req: Request) {
     });
 
     if (!story) {
-      return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+      // Return 404 if story not found or doesn't belong to user
+      return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
     }
 
     // Return empty strings if data is null/undefined
@@ -42,33 +54,42 @@ export async function GET(req: Request) {
 interface UpdateWorldDataBody {
     storyId: string;
     topic?: string;
-    description?: string;
+    description?: string | null; // Allow null for clearing
 }
 
 export async function PUT(req: Request) {
+    const session = await auth();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const { storyId, topic, description }: UpdateWorldDataBody = await req.json();
 
         if (!storyId) {
             return NextResponse.json({ error: 'Missing storyId' }, { status: 400 });
         }
-        // Allow empty strings but not undefined for update
-        if (typeof topic === 'undefined' && typeof description === 'undefined') {
+        // Check if at least one field is provided for update
+        if (topic === undefined && description === undefined) {
              return NextResponse.json({ error: 'Missing data to update (topic or description)' }, { status: 400 });
         }
 
-        // TODO: Add user authentication check
-
-        const dataToUpdate: { worldTopic?: string; worldDescription?: string } = {};
-        if (typeof topic !== 'undefined') {
-            dataToUpdate.worldTopic = topic;
+        const dataToUpdate: { worldTopic?: string | null; worldDescription?: string | null } = {};
+        if (topic !== undefined) {
+            dataToUpdate.worldTopic = topic; // Allow empty string or null
         }
-        if (typeof description !== 'undefined') {
-            dataToUpdate.worldDescription = description;
+        if (description !== undefined) {
+            dataToUpdate.worldDescription = description; // Allow empty string or null
         }
 
+        // Update story only if it belongs to the user
         const updatedStory = await prisma.story.update({
-            where: { id: storyId },
+            where: {
+                id: storyId,
+                userId: userId, // Check ownership
+            },
             data: dataToUpdate,
             select: { id: true } // Only return ID on success
         });
@@ -77,8 +98,9 @@ export async function PUT(req: Request) {
 
     } catch (error: any) {
         console.error('Error updating world data:', error);
-        if (error.code === 'P2025') { // Handle story not found
-            return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+        // Handle specific Prisma error for record not found (means user didn't own it or it didn't exist)
+        if (error.code === 'P2025') {
+            return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
         }
         return NextResponse.json({ error: 'Failed to update world data', details: error.message }, { status: 500 });
     }

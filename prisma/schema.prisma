@@ -3,6 +3,9 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Explicitly set output path relative to schema file
+  // This helps bundlers like Next.js find the client, especially with pnpm
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -10,14 +13,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Optional User model for future authentication integration
+// User model for authentication
 model User {
-  id        String   @id @default(cuid())
-  email     String?  @unique // Optional email
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  stories   Story[] // Relation to stories created by the user
+  id             String    @id @default(cuid())
+  email          String    @unique // Email is required and unique for login
+  name           String?
+  hashedPassword String?   // Store hashed password, optional for OAuth providers
+  emailVerified  DateTime? // For email verification flow
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  stories        Story[]   // Relation to stories created by the user
 }
 
 model Story {
@@ -25,8 +30,8 @@ model Story {
   title              String
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
-  userId             String?   // Optional foreign key to User
-  user               User?     @relation(fields: [userId], references: [id])
+  userId             String    // Required foreign key to User
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade) // Required relation, cascade delete stories if user is deleted
 
   // Store main artifacts as text blobs
   // SQLite's TEXT type handles large strings, @db.Text is not needed/supported
@@ -36,9 +41,12 @@ model Story {
   numCharacters      Int?      @default(3)
   outlineText        String?
   numChapters        Int?      @default(10)
+  mindMapData        String?   // Store ReactFlow data as JSON string
   // Parsed chapters could be stored as JSON or derived on load
 
   chapters           Chapter[] // Relation to individual chapters
+
+  @@index([userId]) // Add index for faster story lookups by user
 }
 
 model Chapter {
