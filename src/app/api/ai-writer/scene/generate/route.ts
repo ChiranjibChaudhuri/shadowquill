@@ -7,7 +7,7 @@ export const runtime = 'edge';
 
 // Instantiate the Google AI provider
 const google = createGoogleGenerativeAI();
-const model = google('models/gemini-2.5-pro-exp-03-25');
+const model = google('models/gemini-2.5-flash-preview-04-17');
 
 interface SceneGenerateRequestBody {
   // Context
