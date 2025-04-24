@@ -26,13 +26,6 @@ export default function CharacterCreationPage() {
   const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
-  // Redirect if no active story
-  useEffect(() => {
-    if (!activeStoryId) {
-      router.replace('/stories');
-    }
-  }, [activeStoryId, router]);
-
   // Load initial state from DB via API
   useEffect(() => {
     const loadInitialData = async () => {
