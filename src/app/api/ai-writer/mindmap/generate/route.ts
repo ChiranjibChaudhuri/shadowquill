@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       // System prompt can still guide the overall task if needed, but primary instructions are in the main prompt now for generateObject
       // system: "Generate a ReactFlow mind map structure.",
       temperature: 0.5,
-      maxTokens: 4096, // Keep maxTokens, though object generation might behave differently
+      maxTokens: 65000, // Keep maxTokens, though object generation might behave differently
     });
 
     // Return the generated object directly as JSON
