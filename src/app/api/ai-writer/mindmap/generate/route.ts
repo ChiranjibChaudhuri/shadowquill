@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 
     // Use generateObject with the schema
     const { object } = await generateObject({
-      model: google('models/gemini-1.5-flash-latest'),
+      model: google('models/gemini-2.5-flash-preview-04-17'),
       schema: reactFlowSchema, // Provide the Zod schema
       prompt: promptContent, // Use the combined context as the main prompt
       // System prompt can still guide the overall task if needed, but primary instructions are in the main prompt now for generateObject

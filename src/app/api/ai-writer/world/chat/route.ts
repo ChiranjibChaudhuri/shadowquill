@@ -7,7 +7,7 @@ import { worldBuilderChatSystemPrompt } from '@/lib/prompts'; // Import the prom
 // Instantiate the Google AI provider
 // Note: The API key is automatically picked up from the GOOGLE_API_KEY environment variable
 const google = createGoogleGenerativeAI();
-const model = google('models/gemini-2.5-pro-exp-03-25'); // Use experimental model
+const model = google('models/gemini-2.5-flash-preview-04-17'); // Use flash preview model
 
 interface WorldChatRequestBody {
   messages: Message[];

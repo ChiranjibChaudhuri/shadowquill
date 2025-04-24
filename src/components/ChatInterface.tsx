@@ -2,6 +2,9 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat, type Message } from 'ai/react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 interface ChatInterfaceProps {
   apiEndpoint: string;
@@ -117,7 +120,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               }`}
             >
               <span className="font-bold capitalize">{m.role === 'assistant' ? 'AI' : 'You'}: </span>
-              {m.content}
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                {m.content}
+              </ReactMarkdown>
             </div>
           </div>
         ))}

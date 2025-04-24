@@ -6,6 +6,9 @@ import { type Message, useCompletion } from 'ai/react';
 import StageLayout from '@/components/StageLayout';
 import ChatInterface from '@/components/ChatInterface';
 import { useStoryContext } from '@/context/StoryContext';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 // Define keys for story-specific data (used for localStorage chat history key)
 const STORY_DATA_KEYS = {
@@ -141,6 +144,28 @@ export default function CharacterCreationPage() {
       }
     };
 
+  // Download Word-format document of final character profiles
+  const handleDownloadCharacters = () => {
+    const element = document.getElementById('charactersPreview');
+    if (!element) return;
+    const html = element.innerHTML;
+    const header = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Character Profiles</title></head><body>';
+    const footer = '</body></html>';
+    const source = header + html + footer;
+    const blob = new Blob(['\ufeff', source], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'character_profiles.doc';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Edit mode toggle
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+
   if (isLoadingData && activeStoryId) {
       return <StageLayout><div>Loading story data...</div></StageLayout>;
   }
@@ -196,20 +221,41 @@ export default function CharacterCreationPage() {
         {/* Right Side: Finalized Profiles */}
         <div>
           <h2 className="text-xl font-semibold mb-2">Final Character Profiles</h2>
-          <textarea
-            value={isFinalizing || isFinalizationLoading ? 'Generating...' : characterProfiles}
-            onChange={(e) => setCharacterProfiles(e.target.value)}
-            placeholder="The finalized character profiles will appear here after generation..."
-            rows={25}
-            className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-            readOnly={!activeStoryId || isFinalizing || isFinalizationLoading || isSaving || isLoadingData}
-          />
-           <button
+          <div className="flex space-x-2 mb-2">
+            <button onClick={() => setIsEditMode(prev => !prev)} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded">
+              {isEditMode ? 'Preview' : 'Edit'}
+            </button>
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto mb-4">
+            {isEditMode ? (
+              <textarea
+                value={characterProfiles}
+                onChange={(e) => setCharacterProfiles(e.target.value)}
+                rows={25}
+                className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
+                disabled={isFinalizing || isFinalizationLoading || isSaving || isLoadingData}
+              />
+            ) : isFinalizing || isFinalizationLoading ? (
+              <div className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">Generating...</div>
+            ) : (
+              <div id="charactersPreview" className="prose dark:prose-dark max-w-none whitespace-pre-wrap">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{characterProfiles}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+          <button
             onClick={handleSaveAndProceed}
             className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
             disabled={!activeStoryId || isSaving || isFinalizing || isFinalizationLoading || !characterProfiles || isLoadingData}
           >
             {isSaving ? 'Saving...' : 'Save & Proceed to Outline'}
+          </button>
+          <button
+            onClick={handleDownloadCharacters}
+            className="mt-2 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded"
+            disabled={!characterProfiles}
+          >
+            Download .doc
           </button>
         </div>
       </div>

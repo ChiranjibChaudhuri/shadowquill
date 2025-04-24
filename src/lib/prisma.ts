@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
 // Import from the explicitly generated path
-import { PrismaClient } from '../../node_modules/.prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 // PrismaClient is attached to the `global` object in development to prevent
 // exhausting your database connection limit.

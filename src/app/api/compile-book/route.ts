@@ -1,7 +1,6 @@
 // src/app/api/compile-book/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-// Removed md-to-pdf import
 import { URL } from 'url';
 
 export async function GET(req: Request) {
@@ -29,40 +28,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Story not found' }, { status: 404 });
     }
 
-    // --- Basic Markdown Compilation ---
-    let markdownContent = `# ${story.title || 'Untitled Story'}\n\n`;
-
-    // Add World Description if available
-    if (story.worldDescription) {
-        markdownContent += `## World\n\n${story.worldDescription}\n\n`;
+    // --- Word Document Compilation ---
+    let htmlBody = `<h1>${story.title || 'Untitled Story'}</h1>`;
+    if (story.chapters.length > 0) {
+      htmlBody += `<h2>Chapters</h2>`;
+      story.chapters.forEach((chapt: { chapterNumber: number; title: string | null; content: string | null }) => {
+        htmlBody += `<h3>Chapter ${chapt.chapterNumber}${chapt.title ? `: ${chapt.title}` : ''}</h3>`;
+        htmlBody += `<p>${(chapt.content ?? '').replace(/\n/g, '<br/>')}</p>`;
+      });
     }
-
-    // Add Character Profiles if available
-    if (story.characterProfiles) {
-        markdownContent += `## Characters\n\n${story.characterProfiles}\n\n`;
-    }
-
-    // Add Outline if available
-    if (story.outlineText) {
-        markdownContent += `## Outline\n\n${story.outlineText}\n\n`;
-    }
-
-    // Add Chapters
-    markdownContent += `## Chapters\n\n`;
-    story.chapters.forEach(chapter => {
-      markdownContent += `### Chapter ${chapter.chapterNumber}${chapter.title ? `: ${chapter.title}` : ''}\n\n`;
-      markdownContent += `${chapter.content || '*(No content)*'}\n\n`; // Add placeholder if content is null/empty
-    });
-    // --- End Markdown Compilation ---
-
-    // Create a sanitized filename for Markdown
-    const filename = `${story.title?.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'story'}.md`;
-
-    // Return the Markdown content directly
-    return new NextResponse(markdownContent, {
+    const header = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${story.title || 'Untitled Story'}</title></head><body>`;
+    const footer = `</body></html>`;
+    const source = `\ufeff${header}${htmlBody}${footer}`;
+    const filename = `${story.title?.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'story'}.doc`;
+    return new NextResponse(source, {
       status: 200,
       headers: {
-        'Content-Type': 'text/markdown; charset=UTF-8', // Set correct MIME type for Markdown
+        'Content-Type': 'application/msword; charset=UTF-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
       },
     });
