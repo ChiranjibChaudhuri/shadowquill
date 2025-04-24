@@ -30,6 +30,10 @@ import ReactFlow, {
 
 import 'reactflow/dist/style.css';
 
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+
 // Define keys for story-specific data
 const STORY_DATA_KEYS = {
   OUTLINE_CHAT_HISTORY: 'outline_chat_history',
@@ -191,6 +195,7 @@ function OutlineCreationPageContent() {
   const [isFinalizing, setIsFinalizing] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [parsedChapters, setParsedChapters] = useState<Chapter[]>([]);
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
   // --- Mind Map State ---
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -387,6 +392,18 @@ function OutlineCreationPageContent() {
         console.log("handleSaveAndProceed finished."); // Log end
         setIsSaving(false);
       }
+  };
+
+  // Download Word-format document of final outline
+  const handleDownloadOutline = () => {
+    const element = document.getElementById('outlinePreview'); if (!element) return;
+    const html = element.innerHTML;
+    const header = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Book Outline</title></head><body>';
+    const footer = '</body></html>';
+    const source = header + html + footer;
+    const blob = new Blob(['\ufeff', source], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = 'book_outline.doc'; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
   };
 
   // --- Mind Map Specific Functions ---
@@ -632,20 +649,41 @@ function OutlineCreationPageContent() {
           {viewMode === 'outline' ? (
             <>
               <h2 className="text-xl font-semibold mb-2">Final Book Outline (Text)</h2>
-              <textarea
-                value={isFinalizing || isFinalizationLoading ? 'Generating...' : outline}
-                onChange={(e) => setOutline(e.target.value)}
-                placeholder="The finalized book outline will appear here after generation..."
-                rows={25}
-                className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
-                readOnly={!activeStoryId || isFinalizing || isFinalizationLoading || isSaving || isLoadingData}
-              />
+              <div className="flex space-x-2 mb-2">
+                <button onClick={() => setIsEditMode(prev => !prev)} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded">
+                  {isEditMode ? 'Preview' : 'Edit'}
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-y-auto mb-4">
+              {isEditMode ? (
+                <textarea
+                  value={outline}
+                  onChange={(e) => setOutline(e.target.value)}
+                  rows={25}
+                  className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
+                  disabled={isFinalizing || isFinalizationLoading || isSaving || isLoadingData}
+                />
+              ) : isFinalizing || isFinalizationLoading ? (
+                <div className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">Generating...</div>
+              ) : (
+                <div id="outlinePreview" className="prose dark:prose-dark max-w-none whitespace-pre-wrap">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{outline}</ReactMarkdown>
+                </div>
+              )}
+              </div>
               <button
                 onClick={handleSaveAndProceed}
                 className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
                 disabled={!activeStoryId || isSaving || isFinalizing || isFinalizationLoading || !outline || parsedChapters.length === 0 || isLoadingData}
               >
                 {isSaving ? 'Saving...' : 'Save & Proceed to Write'}
+              </button>
+              <button
+                onClick={handleDownloadOutline}
+                className="mt-2 w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded"
+                disabled={!outline}
+              >
+                Download .doc
               </button>
               <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-700 rounded max-h-60 overflow-y-auto">
                 <h3 className="font-semibold mb-2">Parsed Chapters ({parsedChapters.length})</h3>

@@ -5,6 +5,9 @@ import { useCompletion } from 'ai/react';
 import StageLayout from '@/components/StageLayout';
 import { useStoryContext } from '@/context/StoryContext';
 import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 
 // Define structure for parsed chapters
 interface Chapter {
@@ -54,6 +57,7 @@ export default function WriteChapterPage() {
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isCompiling, setIsCompiling] = useState<boolean>(false); // Added for compilation state
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
   // Redirect if no active story
   useEffect(() => {
@@ -410,9 +414,9 @@ export default function WriteChapterPage() {
                   onClick={handleCompileBook}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
                   disabled={isCompiling || isLoadingData}
-                  title="Compile world, characters, outline, and all chapters into a downloadable Markdown (.md) file"
+                  title="Compile world, characters, outline, and all chapters into a downloadable Word (.doc) file"
                 >
-                  {isCompiling ? 'Compiling...' : 'Compile & Download Markdown'}
+                  {isCompiling ? 'Compiling...' : 'Download Book .doc'}
                 </button>
              </div>
            )}
@@ -427,7 +431,11 @@ export default function WriteChapterPage() {
                </h2>
                <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded border dark:border-gray-600">
                  <h3 className="font-semibold mb-1">Outline Focus:</h3>
-                 <p className="text-sm whitespace-pre-wrap">{selectedChapter.rawContent}</p>
+                 <div className="prose dark:prose-dark whitespace-pre-wrap">
+                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                     {selectedChapter.rawContent}
+                   </ReactMarkdown>
+                 </div>
                </div>
 
                {/* --- Scene Management Section --- */}
@@ -449,12 +457,46 @@ export default function WriteChapterPage() {
                </div>
                {/* --- End Scene Management Section --- */}
 
+               <div className="mt-6">
+                  <h3 className="text-xl font-semibold mb-4">Scenes Preview</h3>
+                  {chapterScenes.map((scene, index) => (
+                    <div key={scene.id} className="prose dark:prose-dark mb-4 whitespace-pre-wrap p-2 border rounded-md dark:bg-gray-700 dark:text-white">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                        {scene.content}
+                      </ReactMarkdown>
+                    </div>
+                  ))}
+                </div>
+
                {/* --- Full Chapter Generation Section --- */}
                <div>
                   <h3 className="text-xl font-semibold mb-4">Full Chapter Content</h3>
                   <button onClick={handleGenerateChapter} disabled={!activeStoryId || isGenerating || !worldDescription || !characterProfiles || !fullOutline || chapterScenes.length === 0} className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" title={chapterScenes.length === 0 ? "Add and generate scenes first" : `Generate full chapter using outline and ${chapterScenes.length} scene(s)`}>{isGenerating ? 'Generating Full Chapter...' : `Generate Full Chapter (using ${chapterScenes.length} scene(s))`}</button>
                   {generationError && (<p className="text-red-500 mb-2">Error generating chapter: {generationError.message}</p>)}
-                  <textarea value={isGenerating ? 'Generating...' : generatedContent} onChange={(e) => setGeneratedContent(e.target.value)} placeholder={`Generated full chapter content...`} rows={25} className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap" readOnly={!activeStoryId || isGenerating || isSaving}/>
+                  <div className="flex space-x-2 mb-2">
+                    <button onClick={() => setIsEditMode(prev => !prev)} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded">
+                      {isEditMode ? 'Preview' : 'Edit'}
+                    </button>
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto mb-4">
+                    {isEditMode ? (
+                      <textarea
+                        value={generatedContent}
+                        onChange={(e) => setGeneratedContent(e.target.value)}
+                        rows={25}
+                        className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white whitespace-pre-wrap"
+                        disabled={!activeStoryId || isGenerating || isSaving}
+                      />
+                    ) : isGenerating ? (
+                      <div className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">Generating...</div>
+                    ) : (
+                      <div className="max-h-[60vh] overflow-y-auto mb-4 whitespace-pre-wrap dark:bg-gray-700 dark:text-white p-2 border rounded-md">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                          {generatedContent}
+                        </ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
                   <button onClick={handleSaveAndProceed} className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50" disabled={!activeStoryId || isSaving || isGenerating || !generatedContent}>{isSaving ? 'Saving...' : `Save Chapter ${selectedChapter.chapterNumber} & Proceed`}</button>
                </div>
                 {/* --- End Full Chapter Generation Section --- */}
