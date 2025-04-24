@@ -59,13 +59,6 @@ export default function WriteChapterPage() {
   const [isCompiling, setIsCompiling] = useState<boolean>(false); // Added for compilation state
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
-  // Redirect if no active story
-  useEffect(() => {
-    if (!activeStoryId) {
-      router.replace('/stories');
-    }
-  }, [activeStoryId, router]);
-
   // Function to fetch data from backend API
   const loadDataFromApi = useCallback(async (endpoint: string, params: Record<string, string>, defaultValue: any = '') => {
     if (!activeStoryId) return defaultValue;

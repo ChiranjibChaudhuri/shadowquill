@@ -31,7 +31,8 @@ export default function WorldBuildingPage() {
   // Redirect if no active story
   useEffect(() => {
     if (!activeStoryId) {
-      router.replace('/stories');
+      router.push('/stories');
+      return;
     }
   }, [activeStoryId, router]);
 

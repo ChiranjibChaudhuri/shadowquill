@@ -378,8 +378,7 @@ function OutlineCreationPageContent() {
         // Only navigate if both saves were successful
         if (mindMapSaved && outlineSaved) {
             console.log("Both saves successful. Attempting navigation to /write...");
-            router.push('/write');
-            console.log("Navigation to /write requested."); // Log after push request
+            if (typeof window !== 'undefined') window.location.href = '/write';
         } else {
              console.log("One or both save operations failed. Navigation skipped.");
         }
