@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useCompletion } from 'ai/react';
 import StageLayout from '@/components/StageLayout';
 import { useStoryContext } from '@/context/StoryContext';
-import { useRouter } from 'next/navigation';
+// import { useRouter } from 'next/navigation'; // Removed unused import
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -37,14 +37,14 @@ const STORY_DATA_KEYS = {
 };
 
 export default function WriteChapterPage() {
-  const { activeStoryId, stories } = useStoryContext();
-  const router = useRouter();
+  const { activeStoryId } = useStoryContext(); // Removed unused 'stories'
+  // const router = useRouter(); // Removed unused variable
 
   // Context state loaded from DB
   const [worldDescription, setWorldDescription] = useState<string>('');
   const [characterProfiles, setCharacterProfiles] = useState<string>('');
   const [fullOutline, setFullOutline] = useState<string>('');
-  const [mindMapData, setMindMapData] = useState<any>(null); // Added state for mind map data
+  const [mindMapData, setMindMapData] = useState<Record<string, unknown> | null>(null); // Use Record<string, unknown> | null instead of any
   const [parsedChapters, setParsedChapters] = useState<Chapter[]>([]);
 
   // Chapter specific state
@@ -59,8 +59,8 @@ export default function WriteChapterPage() {
   const [isCompiling, setIsCompiling] = useState<boolean>(false); // Added for compilation state
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
-  // Function to fetch data from backend API
-  const loadDataFromApi = useCallback(async (endpoint: string, params: Record<string, string>, defaultValue: any = '') => {
+  // Function to fetch data from backend API - Made generic
+  const loadDataFromApi = useCallback(async <T,>(endpoint: string, params: Record<string, string>, defaultValue: T): Promise<T> => {
     if (!activeStoryId) return defaultValue;
     const queryParams = new URLSearchParams({ storyId: activeStoryId, ...params }).toString();
     try {
@@ -109,17 +109,19 @@ export default function WriteChapterPage() {
         setIsLoadingData(true); // Set loading true at the start
         try {
             // Fetch world, characters, outline, and mind map data
+            // Provide appropriate default values matching expected API response structure
             const [worldData, charData, outlineData, mapData] = await Promise.all([
-                loadDataFromApi('/api/story-data/world', {}),
-                loadDataFromApi('/api/story-data/characters', {}),
-                loadDataFromApi('/api/story-data/outline', {}),
-                loadDataFromApi('/api/story-data/mindmap', {}, { mindMapData: null }) // Fetch mind map data, default null
+                loadDataFromApi('/api/story-data/world', {}, { description: '' }),
+                loadDataFromApi('/api/story-data/characters', {}, { profiles: '' }),
+                loadDataFromApi('/api/story-data/outline', {}, { outline: '', numChapters: 10 }),
+                loadDataFromApi('/api/story-data/mindmap', {}, { mindMapData: null }) // Default value already provided here
             ]);
-            setWorldDescription(worldData?.description ?? '');
-            setCharacterProfiles(charData?.profiles ?? '');
-            setFullOutline(outlineData?.outline ?? '');
-            setMindMapData(mapData?.mindMapData ?? null); // Store mind map data
-            setParsedChapters(parseOutline(outlineData?.outline ?? ''));
+            // Access properties directly as the default value ensures they exist
+            setWorldDescription(worldData.description);
+            setCharacterProfiles(charData.profiles);
+            setFullOutline(outlineData.outline);
+            setMindMapData(mapData.mindMapData); // Store mind map data
+            setParsedChapters(parseOutline(outlineData.outline));
         } catch (error) {
             console.error("Error loading general story data:", error);
             setWorldDescription(''); setCharacterProfiles(''); setFullOutline('');
@@ -329,9 +331,11 @@ export default function WriteChapterPage() {
          const nextChapterIndex = parsedChapters.findIndex(chap => chap.chapterNumber === selectedChapter.chapterNumber + 1);
          if (nextChapterIndex !== -1) setSelectedChapter(parsedChapters[nextChapterIndex]);
        }
-     } catch (error: any) {
-       console.error(`Error saving chapter ${selectedChapter.chapterNumber}:`, error);
-       alert(`Error saving chapter: ${error.message}`);
+     } catch (error: unknown) { // Use unknown
+       console.error(`Error saving chapter ${selectedChapter?.chapterNumber}:`, error); // Use optional chaining for selectedChapter
+       // Type check for error message
+       const message = error instanceof Error ? error.message : String(error);
+       alert(`Error saving chapter: ${message}`);
      } finally {
        setIsSaving(false);
      }
@@ -339,22 +343,54 @@ export default function WriteChapterPage() {
 
   // --- Compile Manuscript Function ---
   const handleCompileBook = async () => {
+    // Add check for activeStoryId
     if (!activeStoryId) {
-      alert('No active story selected.');
+      alert('Please select an active story before compiling.');
       return;
     }
+
     setIsCompiling(true);
     try {
-      // Construct the URL for the GET request
+      // Fetch the compiled markdown manuscript from the API
+      // Now we know activeStoryId is a string
       const compileUrl = `/api/compile-book?storyId=${encodeURIComponent(activeStoryId)}`;
-      // Navigate to the URL to trigger download
-      window.location.href = compileUrl;
-      // Note: We can't easily track download completion client-side this way.
-      // The button will re-enable after a short delay.
-      setTimeout(() => setIsCompiling(false), 3000); // Re-enable after 3 seconds
-    } catch (error: any) {
-      console.error("Error initiating book compilation:", error);
-      alert(`Failed to start book compilation: ${error.message}`);
+      const response = await fetch(compileUrl);
+      if (!response.ok) throw new Error('Failed to compile book.');
+      // NOTE: The API currently returns HTML for a .doc file, not Markdown.
+      // The client-side code below tries to re-process it, which might be redundant or incorrect.
+      // For now, we'll keep the client-side processing as is, but ideally, the API should return the desired format directly.
+      const docHtmlContent = await response.text(); // Assuming API returns the .doc HTML
+
+      // Convert markdown to HTML (basic) - This section seems incorrect given the API response
+      // For more advanced conversion, consider using a markdown-to-html library
+      // const htmlContent = window.marked ? window.marked.parse(markdown) : markdown.replace(/\n/g, '<br>');
+      // const header = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Book Manuscript</title></head><body>';
+      // const footer = '</body></html>';
+      // const source = header + htmlContent + footer;
+
+      // Use the HTML content directly from the API response for the Blob
+      const blob = new Blob(['\ufeff', docHtmlContent], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Attempt to get filename from Content-Disposition header if possible, otherwise default
+      const disposition = response.headers.get('content-disposition');
+      let filename = 'book_manuscript.doc'; // Default filename
+      if (disposition && disposition.indexOf('attachment') !== -1) {
+          const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+          const matches = filenameRegex.exec(disposition);
+          if (matches != null && matches[1]) {
+            filename = matches[1].replace(/['"]/g, '');
+          }
+      }
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Error compiling book: ' + (err instanceof Error ? err.message : String(err))); // Ensure error is string
+    } finally {
       setIsCompiling(false);
     }
   };
@@ -452,7 +488,7 @@ export default function WriteChapterPage() {
 
                <div className="mt-6">
                   <h3 className="text-xl font-semibold mb-4">Scenes Preview</h3>
-                  {chapterScenes.map((scene, index) => (
+                  {chapterScenes.map((scene) => ( // Removed unused 'index'
                     <div key={scene.id} className="prose dark:prose-dark mb-4 whitespace-pre-wrap p-2 border rounded-md dark:bg-gray-700 dark:text-white">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                         {scene.content}

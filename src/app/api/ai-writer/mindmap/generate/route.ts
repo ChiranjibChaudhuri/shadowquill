@@ -55,9 +55,11 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'application/json' },
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error('Error generating mind map object:', error);
+    // Type check for error message
+    const message = error instanceof Error ? error.message : String(error);
     // Ensure error response is also JSON
-    return new Response(JSON.stringify({ error: `Error generating mind map object: ${error.message || 'Unknown error'}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: `Error generating mind map object: ${message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }

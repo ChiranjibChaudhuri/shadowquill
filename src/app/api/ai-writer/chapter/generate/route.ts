@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText, type Message } from 'ai';
+import { streamText } from 'ai'; // Removed unused 'Message' import
 import { chapterGeneratorSystemPrompt } from '@/lib/prompts';
 
 // IMPORTANT: Set the runtime to edge

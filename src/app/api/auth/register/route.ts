@@ -33,12 +33,14 @@ export async function POST(request: Request) {
     });
 
     // Don't return the password hash
-    // Use type assertion to bypass TS error if it persists
-    const { hashedPassword: _, ...userWithoutPassword } = (user as any);
+    // Destructure and explicitly mark hashedPassword as unused with '_'
+    const { hashedPassword: _, ...userWithoutPassword } = user;
 
     return NextResponse.json(userWithoutPassword, { status: 201 }); // 201 Created
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error('REGISTRATION ERROR:', error);
+    // Optionally add type check for more specific error logging
+    // const message = error instanceof Error ? error.message : String(error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
