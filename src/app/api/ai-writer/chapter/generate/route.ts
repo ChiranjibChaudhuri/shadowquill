@@ -7,7 +7,7 @@ export const runtime = 'edge';
 
 // Instantiate the Google AI provider
 const google = createGoogleGenerativeAI(); // API key from GOOGLE_API_KEY env var
-const model = google('models/gemini-2.5-pro-exp-03-25'); // Use updated experimental model
+const model = google('models/gemini-2.5-flash-preview-04-17'); // Use flash preview model
 
 interface ChapterGenerateRequestBody {
   // Full context needed for chapter generation
