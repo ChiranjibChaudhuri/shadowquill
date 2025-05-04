@@ -9,6 +9,17 @@ import type { Session, User as NextAuthUser, NextAuthConfig } from 'next-auth'; 
 import type { JWT } from 'next-auth/jwt';
 import bcrypt from 'bcryptjs';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import GoogleProvider from 'next-auth/providers/google';
+import GitHubProvider from 'next-auth/providers/github';
+
+// Define a type for the User model fetched from Prisma, including hashedPassword
+interface PrismaUser {
+  id: string;
+  email: string;
+  name: string | null;
+  hashedPassword: string | null; // Ensure this matches your schema
+  // Add other fields if needed by authorize logic
+}
 
 // Extend the default Session User type to include id
 interface SessionUser extends NextAuthUser {
@@ -51,7 +62,9 @@ const finalAuthConfig: NextAuthConfig = {
           return null;
         }
 
-        const hashedPassword = (user as any).hashedPassword;
+        // Assert the type of the fetched user
+        const prismaUser = user as PrismaUser;
+        const hashedPassword = prismaUser.hashedPassword;
         if (!hashedPassword) {
             console.log('User found but has no valid password set in main handler.');
             return null;
@@ -68,7 +81,14 @@ const finalAuthConfig: NextAuthConfig = {
         return { id: user.id, name: user.name, email: user.email };
       }
     }),
-    // Add other providers like Google, GitHub etc. here if needed
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    }),
+    GitHubProvider({
+        clientId: process.env.GITHUB_CLIENT_ID,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    }),
   ],
   callbacks: {
     // Keep authorized from authConfig

@@ -28,7 +28,7 @@ const StoryContext = createContext<StoryContextType | undefined>(undefined);
 const LOCAL_STORAGE_ACTIVE_STORY_KEY = 'shadowquill_active_story_id';
 
 export const StoryProvider = ({ children }: { children: ReactNode }) => {
-  const { data: session, status: authStatus } = useSession(); // Get session status
+  const { status: authStatus } = useSession(); // Get session status, removed unused 'data: session'
   const [stories, setStories] = useState<Story[]>([]);
   const [activeStoryId, setActiveStoryIdState] = useState<string | null>(null);
   const [isLoadingStories, setIsLoadingStories] = useState<boolean>(true); // Loading state initially true
@@ -59,9 +59,10 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
         // Convert createdAt string from DB to number if needed, or adjust Story interface
         // Ensure data is an array before mapping
         if (Array.isArray(data)) {
-            setStories(data.map((story: any) => ({
+            // Use the local Story interface, acknowledging it might not cover all fields from DB
+            setStories(data.map((story: Story) => ({
                 ...story,
-                createdAt: new Date(story.createdAt).getTime()
+                createdAt: new Date(story.createdAt).getTime() // Convert date string/object to timestamp number
             })));
         } else {
             console.error("Received non-array data for stories:", data);
@@ -141,13 +142,6 @@ export const StoryProvider = ({ children }: { children: ReactNode }) => {
           ...newStoryData,
           createdAt: newStoryData.createdAt ? new Date(newStoryData.createdAt).getTime() : Date.now()
       };
-
-      // Pre-create directory (fire and forget, errors handled in API)
-      fetch('/api/create-story-directory', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storyId: newStory.id }),
-      }).catch(err => console.error("Error pre-creating directory:", err));
 
       setStories((prev: Story[]) => [newStory, ...prev]); // Add type for prev
       setActiveStoryId(newStory.id); // Activate new story

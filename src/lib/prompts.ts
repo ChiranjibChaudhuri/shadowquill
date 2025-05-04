@@ -1,3 +1,4 @@
+
 /**
  * Centralized prompts for the Shadowquill AI book writing application.
  * Adapted for use with Google Gemini models via Vercel AI SDK.
@@ -260,6 +261,34 @@ INSTRUCTIONS:
         *   Connection between a theme and plot points/characters.
     *   You can optionally add 'label' to edges to describe the relationship (e.g., 'leads to', 'conflicts with', 'loves').
 4.  **Output Format:** The entire response MUST be ONLY the valid JSON object containing the 'nodes' and 'edges' arrays. Do NOT include any introductory text, explanations, comments, or markdown formatting (like \`\`\`json). The response should start directly with \`{\` and end directly with \`}\`.
+
+Use the following JSON structure as a reference:
+{
+  "nodes": [
+    { "id": "protagonist", "position": { "x": 100, "y": 200 }, "data": { "label": "[Protagonist]" } },
+    { "id": "antagonist", "position": { "x": 700, "y": 200 }, "data": { "label": "[Antagonist]" } },
+    { "id": "inciting", "position": { "x": 250, "y": 100 }, "data": { "label": "Inciting Incident" } },
+    { "id": "midpoint", "position": { "x": 400, "y": 300 }, "data": { "label": "Midpoint" } },
+    { "id": "climax", "position": { "x": 550, "y": 100 }, "data": { "label": "Climax" } },
+    { "id": "resolution", "position": { "x": 400, "y": 500 }, "data": { "label": "Resolution" } },
+    { "id": "theme", "position": { "x": 400, "y": -50 }, "data": { "label": "Theme: [Main Theme]" } },
+    { "id": "magic-tech", "position": { "x": 100, "y": 400 }, "data": { "label": "Magic/Tech" } },
+    { "id": "faction-conflict", "position": { "x": 700, "y": 400 }, "data": { "label": "Faction Conflict" } }
+  ],
+  "edges": [
+    { "id": "e-prot-inciting", "source": "protagonist", "target": "inciting" },
+    { "id": "e-inciting-midpoint", "source": "inciting", "target": "midpoint", "label": "leads to" },
+    { "id": "e-midpoint-climax", "source": "midpoint", "target": "climax", "label": "leads to" },
+    { "id": "e-climax-resolution", "source": "climax", "target": "resolution", "label": "results in" },
+    { "id": "e-prot-ant", "source": "protagonist", "target": "antagonist", "label": "opposes", "animated": true },
+    { "id": "e-ant-climax", "source": "antagonist", "target": "climax", "label": "drives conflict" },
+    { "id": "e-prot-climax", "source": "protagonist", "target": "climax" },
+    { "id": "e-magic-prot", "source": "magic-tech", "target": "protagonist", "label": "used by" },
+    { "id": "e-faction-ant", "source": "faction-conflict", "target": "antagonist", "label": "involved in" },
+    { "id": "e-theme-climax", "source": "theme", "target": "climax", "label": "central to", "type": "smoothstep" },
+    { "id": "e-theme-prot", "source": "theme", "target": "protagonist", "label": "reflects arc", "type": "smoothstep" }
+  ]
+}
 
 FINAL INSTRUCTION: Generate ONLY the valid ReactFlow JSON structure based on the provided context. Your entire output must be parsable as a single JSON object.`;
 

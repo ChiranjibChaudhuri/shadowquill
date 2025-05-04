@@ -129,9 +129,11 @@ export default function CharacterCreationPage() {
 
         console.log('Character data saved to database successfully.');
         router.push('/outline');
-      } catch (error: any) {
+      } catch (error: unknown) { // Use unknown
         console.error('Error saving character data:', error);
-        alert(`Error saving character data: ${error.message}`);
+        // Type check for error message
+        const message = error instanceof Error ? error.message : String(error);
+        alert(`Error saving character data: ${message}`);
       } finally {
         setIsSaving(false);
       }

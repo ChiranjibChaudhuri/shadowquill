@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       // System prompt can still guide the overall task if needed, but primary instructions are in the main prompt now for generateObject
       // system: "Generate a ReactFlow mind map structure.",
       temperature: 0.5,
-      maxTokens: 4096, // Keep maxTokens, though object generation might behave differently
+      maxTokens: 65000, // Keep maxTokens, though object generation might behave differently
     });
 
     // Return the generated object directly as JSON
@@ -55,9 +55,11 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'application/json' },
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error('Error generating mind map object:', error);
+    // Type check for error message
+    const message = error instanceof Error ? error.message : String(error);
     // Ensure error response is also JSON
-    return new Response(JSON.stringify({ error: `Error generating mind map object: ${error.message || 'Unknown error'}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: `Error generating mind map object: ${message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }

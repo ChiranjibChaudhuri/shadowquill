@@ -3,7 +3,8 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { signIn } from 'next-auth/react'; // Import signIn for auto-login after registration
+import { signIn } from 'next-auth/react'; // Import signIn for auto-login and OAuth
+import { FaGoogle, FaGithub } from 'react-icons/fa'; // Import icons
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -156,6 +157,39 @@ export default function RegisterPage() {
             </button>
           </div>
         </form>
+
+        {/* Divider */}
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or register with</span>
+          </div>
+        </div>
+
+        {/* OAuth Buttons */}
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => signIn('google', { callbackUrl: '/stories' })} // Redirect to stories after successful OAuth
+            disabled={isLoading}
+            className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          >
+            <FaGoogle className="w-5 h-5 mr-2" />
+            Register with Google
+          </button>
+          <button
+            type="button"
+            onClick={() => signIn('github', { callbackUrl: '/stories' })} // Redirect to stories after successful OAuth
+            disabled={isLoading}
+            className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          >
+            <FaGithub className="w-5 h-5 mr-2" />
+            Register with GitHub
+          </button>
+        </div>
+
         <p className="text-sm text-center text-gray-600 dark:text-gray-400">
             Already have an account?{' '}
             <Link href="/auth/signin" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">

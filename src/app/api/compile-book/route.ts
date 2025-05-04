@@ -49,12 +49,15 @@ export async function GET(req: Request) {
       },
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error(`Error compiling book for story ${storyId}:`, error);
     // Handle specific Prisma error for record not found separately if needed
-    if (error.code === 'P2025') {
+    // Check if error is an object and has a 'code' property before accessing it
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
         return NextResponse.json({ error: 'Story not found during compilation' }, { status: 404 });
     }
-    return NextResponse.json({ error: 'Failed to compile book', details: error.message }, { status: 500 });
+    // Type check for general error message
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: 'Failed to compile book', details: message }, { status: 500 });
   }
 }
