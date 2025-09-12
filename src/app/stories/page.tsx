@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useStoryContext } from '@/context/StoryContext';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+// import Link from 'next/link'; // Removed unused import
 import { useSession, signIn } from 'next-auth/react'; // Import useSession and signIn
 
 // Keep Story interface from context or redefine if context is removed later
@@ -14,7 +14,7 @@ interface Story {
 }
 
 export default function StoriesPage() {
-  const { data: session, status: authStatus } = useSession(); // Get auth status
+  const { status: authStatus } = useSession(); // Get auth status, removed unused 'data: session'
   // Get state management functions from context
   const { activeStoryId, setActiveStoryId } = useStoryContext();
   const [stories, setStories] = useState<Story[]>([]); // Local state for stories list
@@ -81,13 +81,6 @@ export default function StoriesPage() {
       if (!response.ok) throw new Error((await response.json()).error || 'Failed to create story');
       const newStoryData = await response.json();
       const newStory = { ...newStoryData, createdAt: new Date(newStoryData.createdAt).getTime() };
-
-      // Pre-create directory (fire and forget)
-      fetch('/api/create-story-directory', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storyId: newStory.id }),
-      }).catch(err => console.error("Error pre-creating directory:", err));
 
       // Add type annotation for prev and sort parameters
       setStories((prev: Story[]) => [newStory, ...prev].sort((a: Story, b: Story) => b.createdAt - a.createdAt));
@@ -214,7 +207,7 @@ export default function StoriesPage() {
       <div>
         <h2 className="text-2xl font-semibold mb-4">Existing Stories</h2>
         {stories.length === 0 ? (
-          <p className="text-gray-500">You haven't created any stories yet.</p>
+          <p className="text-gray-500">You haven`&apos;t created any stories yet.</p>
         ) : (
           <ul className="space-y-4">
             {stories.map((story: Story) => ( // Add type annotation here

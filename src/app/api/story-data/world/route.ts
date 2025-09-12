@@ -44,9 +44,11 @@ export async function GET(req: Request) {
         description: story.worldDescription ?? '',
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error('Error fetching world data:', error);
-    return NextResponse.json({ error: 'Failed to fetch world data', details: error.message }, { status: 500 });
+    // Type check for error message
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: 'Failed to fetch world data', details: message }, { status: 500 });
   }
 }
 
@@ -96,12 +98,15 @@ export async function PUT(req: Request) {
 
         return NextResponse.json({ message: 'World data updated successfully', storyId: updatedStory.id });
 
-    } catch (error: any) {
+    } catch (error: unknown) { // Use unknown
         console.error('Error updating world data:', error);
         // Handle specific Prisma error for record not found (means user didn't own it or it didn't exist)
-        if (error.code === 'P2025') {
+        // Check if error is an object and has a 'code' property before accessing it
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
             return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
         }
-        return NextResponse.json({ error: 'Failed to update world data', details: error.message }, { status: 500 });
+        // Type check for general error message
+        const message = error instanceof Error ? error.message : String(error);
+        return NextResponse.json({ error: 'Failed to update world data', details: message }, { status: 500 });
     }
 }

@@ -9,7 +9,7 @@ import rehypeRaw from 'rehype-raw';
 interface ChatInterfaceProps {
   apiEndpoint: string;
   initialMessages?: Message[];
-  systemPromptContext?: Record<string, any>;
+  systemPromptContext?: Record<string, unknown>; // Use unknown instead of any
   placeholder?: string;
   title: string;
   localStorageKey: string; // Key to save/load chat history
@@ -143,7 +143,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             } else if (parsedError && parsedError.error) {
               displayMessage = parsedError.error; // Fallback to error type if details missing
             }
-          } catch (e) {
+          } catch { // Remove unused 'e' variable
             // If parsing fails, just use the raw error message
           }
           return (

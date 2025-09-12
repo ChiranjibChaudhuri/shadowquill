@@ -21,8 +21,11 @@ model User {
   hashedPassword String?   // Store hashed password, optional for OAuth providers
   emailVerified  DateTime? // For email verification flow
   createdAt      DateTime  @default(now())
+  image          String?   // Optional profile image URL from OAuth
   updatedAt      DateTime  @updatedAt
   stories        Story[]   // Relation to stories created by the user
+  accounts       Account[] // Relation to OAuth accounts
+  sessions       Session[] // Relation to user sessions
 }
 
 model Story {
@@ -65,3 +68,35 @@ model Chapter {
 
 // We are not storing individual Scenes in the DB in this iteration.
 // They will remain managed in localStorage via StoryContext for now.
+
+
+// Models required by NextAuth Prisma Adapter
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? // @db.Text
+  access_token      String? // @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? // @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId]) // Add index for faster account lookups by user
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId]) // Add index for faster session lookups by user
+}

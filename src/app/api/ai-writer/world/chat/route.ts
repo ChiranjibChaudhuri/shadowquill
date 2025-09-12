@@ -40,37 +40,42 @@ export async function POST(req: Request) {
       // Return the stream response
       return result.toDataStreamResponse();
 
-    } catch (modelError: any) {
+    } catch (modelError: unknown) { // Use unknown
+      // Type check for error message
+      const message = modelError instanceof Error ? modelError.message : String(modelError);
       console.error('Model API Error:', {
         error: modelError,
-        message: modelError?.message,
-        details: modelError?.details,
+        message: message,
+        // details: modelError?.details, // Cannot safely access details
       });
 
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'AI model error',
-          details: modelError?.message || 'Unknown error occurred'
+          details: message
         }),
-        { 
+        {
           status: 502,
           headers: { 'Content-Type': 'application/json' }
         }
       );
     }
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
+    // Type check for error message
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
     console.error('General API Error:', {
       error,
-      message: error?.message,
-      stack: error?.stack,
+      message: message,
+      stack: stack,
     });
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: 'Server error',
-        details: error?.message || 'An unexpected error occurred'
+        details: message
       }),
-      { 
+      {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       }

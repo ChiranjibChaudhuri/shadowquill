@@ -31,6 +31,7 @@ lerna-debug.log*
 # Local development environment variables
 .env*.local
 .env
+.env.production
 
 # Turborepo
 .turbo

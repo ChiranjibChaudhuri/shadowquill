@@ -24,7 +24,7 @@ import ReactFlow, {
   type NodeChange,
   type EdgeChange,
   type Connection,
-  type Viewport,
+  // type Viewport, // Removed unused import
   type ReactFlowInstance,
 } from 'reactflow';
 
@@ -383,10 +383,12 @@ function OutlineCreationPageContent() {
              console.log("One or both save operations failed. Navigation skipped.");
         }
 
-      } catch (error: any) {
+      } catch (error: unknown) { // Use unknown
         // This catch block will now catch errors from handleSaveMindMap OR the outline fetch
         console.error('Error saving data and proceeding:', error);
-        alert(`Error saving data: ${error.message}`); // Show specific error
+        // Type check for error message
+        const message = error instanceof Error ? error.message : String(error);
+        alert(`Error saving data: ${message}`); // Show specific error
       } finally {
         console.log("handleSaveAndProceed finished."); // Log end
         setIsSaving(false);
@@ -417,8 +419,8 @@ function OutlineCreationPageContent() {
     console.log("Saving mind map data..."); // Log start of save
     try {
         // Get current viewport from instance to save it
-        const viewport = rfInstance?.getViewport();
-        const flowData = { nodes, edges, viewport }; // Include viewport
+        const currentViewport = rfInstance?.getViewport(); // Rename to avoid conflict if needed, ensure it's used
+        const flowData = { nodes, edges, viewport: currentViewport }; // Correctly include viewport
         const response = await fetch('/api/story-data/mindmap', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -431,9 +433,11 @@ function OutlineCreationPageContent() {
         }
         const result = await response.json();
         console.log('Mind map data saved successfully:', result);
-    } catch (error: any) {
+    } catch (error: unknown) { // Use unknown
         console.error('Error saving mind map data:', error);
-        alert(`Error saving mind map: ${error.message}`); // Show alert specifically for mind map save error
+        // Type check for error message
+        const message = error instanceof Error ? error.message : String(error);
+        alert(`Error saving mind map: ${message}`); // Show alert specifically for mind map save error
         throw error; // Re-throw error so handleSaveAndProceed knows it failed
     } finally {
         setIsSavingMindMap(false);
@@ -487,7 +491,7 @@ function OutlineCreationPageContent() {
   const addNode = useCallback(() => {
     if (isAddingEdge) return; // Don't add node while adding edge
     // Get viewport center (or use default if instance not ready)
-    const viewport: Viewport = rfInstance?.getViewport() ?? { x: 0, y: 0, zoom: 1 };
+    // const viewport: Viewport = rfInstance?.getViewport() ?? { x: 0, y: 0, zoom: 1 }; // Removed unused variable
     // Project viewport center to flow coordinates
     const position = rfInstance?.project({
         x: window.innerWidth / 2,
@@ -538,7 +542,7 @@ function OutlineCreationPageContent() {
                 if (errorJson && errorJson.error) {
                     errorDetails = errorJson.error;
                 }
-            } catch (e) { /* Ignore parsing error, use status text */ }
+            } catch { /* Ignore parsing error, use status text */ } // Remove unused 'e'
             throw new Error(errorDetails);
         }
 
@@ -561,15 +565,19 @@ function OutlineCreationPageContent() {
             } else {
                 throw new Error('Invalid JSON structure received from AI.');
             }
-        } catch (parseError: any) {
+        } catch (parseError: unknown) { // Use unknown
             // Log the raw text that failed to parse
             console.error("Failed to parse mind map JSON:", parseError, "Received:", rawResponseText);
-            setGenerationError(`Failed to parse AI response: ${parseError.message}`);
+            // Type check for error message
+            const message = parseError instanceof Error ? parseError.message : String(parseError);
+            setGenerationError(`Failed to parse AI response: ${message}`);
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) { // Use unknown
         console.error('Error generating mind map:', error);
-        setGenerationError(`Generation failed: ${error.message}`);
+        // Type check for error message
+        const message = error instanceof Error ? error.message : String(error);
+        setGenerationError(`Generation failed: ${message}`);
     } finally {
         setIsGeneratingMindMap(false);
     }

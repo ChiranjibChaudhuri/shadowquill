@@ -4,6 +4,7 @@
 // import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import Link from 'next/link';
+import Image from 'next/image'; // Import next/image
 import { StoryProvider } from '@/context/StoryContext';
 import AuthProvider from '@/context/AuthProvider';
 import { useSession, signOut, signIn } from 'next-auth/react';
@@ -39,7 +40,8 @@ const AppHeader = () => {
     <header className="bg-gray-800 text-white p-4 shadow-md sticky top-0 z-10">
       <nav className="container mx-auto flex justify-between items-center">
         <Link href="/" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-          <img src="/shadowquill-logo.svg" alt="Shadowquill Logo" width={32} height={32} className="inline-block" />
+          {/* Use next/image component */}
+          <Image src="/shadowquill-logo.svg" alt="Shadowquill Logo" width={32} height={32} className="inline-block" />
           <span className="text-xl font-bold">Shadowquill</span>
         </Link>
         <div className="flex items-center space-x-4">

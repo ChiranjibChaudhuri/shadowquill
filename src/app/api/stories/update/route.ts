@@ -36,12 +36,15 @@ export async function PUT(req: Request) { // Use PUT for updates
     console.log("Story updated:", updatedStory);
     return NextResponse.json(updatedStory);
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error('Error updating story:', error);
     // Handle specific Prisma error for record not found
-    if (error.code === 'P2025') {
-        return NextResponse.json({ error: 'Story not found' }, { status: 404 });
+    // Check if error is an object and has a 'code' property before accessing it
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
+        return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 }); // More specific error
     }
-    return NextResponse.json({ error: 'Failed to update story', details: error.message }, { status: 500 });
+    // Type check for general error message
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: 'Failed to update story', details: message }, { status: 500 });
   }
 }

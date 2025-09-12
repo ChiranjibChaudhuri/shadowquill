@@ -1,16 +1,20 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, Suspense } from 'react'; // Import Suspense
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { FaGoogle, FaGithub } from 'react-icons/fa'; // Import icons
 
-export default function SignInPage() {
+// Define the component logic that uses useSearchParams
+function SignInFormContent() { // Renamed inner component
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(searchParams.get('error')); // Get error from query params
+  // Get error from query params *inside* the component using the hook
+  const initialError = searchParams.get('error');
+  const [error, setError] = useState<string | null>(initialError);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (event: FormEvent) => {
@@ -52,6 +56,9 @@ export default function SignInPage() {
       setIsLoading(false);
     }
   };
+
+  // Get callbackUrl inside the component
+  const callbackUrl = searchParams.get('callbackUrl') || '/stories';
 
   return (
     <div className="flex justify-center items-center min-h-[calc(100vh-200px)]"> {/* Adjust height as needed */}
@@ -105,13 +112,57 @@ export default function SignInPage() {
             </button>
           </div>
         </form>
+
+        {/* Divider */}
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">Or continue with</span>
+          </div>
+        </div>
+
+        {/* OAuth Buttons */}
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => signIn('google', { callbackUrl: callbackUrl })}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          >
+            <FaGoogle className="w-5 h-5 mr-2" />
+            Sign in with Google
+          </button>
+          <button
+            type="button"
+            onClick={() => signIn('github', { callbackUrl: callbackUrl })}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          >
+            <FaGithub className="w-5 h-5 mr-2" />
+            Sign in with GitHub
+          </button>
+        </div>
+
          <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/auth/register" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
               Register here
             </Link>
           </p>
       </div>
     </div>
+  );
+}
+
+// Wrap the component that uses useSearchParams in Suspense
+// This is the default export for the page
+export default function SignInPage() {
+  // You can add layout or other non-Suspense-dependent elements here if needed
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SignInFormContent /> {/* Render the component using the hook inside Suspense */}
+    </Suspense>
   );
 }

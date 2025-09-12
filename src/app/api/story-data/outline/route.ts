@@ -30,9 +30,11 @@ export async function GET(req: Request) {
         outline: story.outlineText ?? '',
         numChapters: story.numChapters ?? 10, // Default if null
     });
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error('Error fetching outline data:', error);
-    return NextResponse.json({ error: 'Failed to fetch outline data', details: error.message }, { status: 500 });
+    // Type check for error message
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: 'Failed to fetch outline data', details: message }, { status: 500 });
   }
 }
 
@@ -72,9 +74,15 @@ export async function PUT(req: Request) {
         });
 
         return NextResponse.json({ message: 'Outline data updated successfully', storyId: updatedStory.id });
-    } catch (error: any) {
+    } catch (error: unknown) { // Use unknown
         console.error('Error updating outline data:', error);
-        if (error.code === 'P2025') return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
-        return NextResponse.json({ error: 'Failed to update outline data', details: error.message }, { status: 500 });
+        // Handle specific Prisma error for record not found
+        // Check if error is an object and has a 'code' property before accessing it
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2025') {
+            return NextResponse.json({ error: 'Story not found or unauthorized' }, { status: 404 });
+        }
+        // Type check for general error message
+        const message = error instanceof Error ? error.message : String(error);
+        return NextResponse.json({ error: 'Failed to update outline data', details: message }, { status: 500 });
     }
 }

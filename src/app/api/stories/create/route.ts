@@ -34,8 +34,10 @@ export async function POST(req: Request) {
     console.log("New story created:", newStory);
     return NextResponse.json(newStory, { status: 201 }); // 201 Created status
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Use unknown
     console.error('Error creating story:', error);
-    return NextResponse.json({ error: 'Failed to create story', details: error.message }, { status: 500 });
+    // Type check for error message
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: 'Failed to create story', details: message }, { status: 500 });
   }
 }

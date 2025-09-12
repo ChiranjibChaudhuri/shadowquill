@@ -121,9 +121,11 @@ export default function WorldBuildingPage() {
 
         console.log('World data saved to database successfully.');
         router.push('/characters');
-      } catch (error: any) {
+      } catch (error: unknown) { // Use unknown
         console.error('Error saving world data:', error);
-        alert(`Error saving world data: ${error.message}`);
+        // Type check for error message
+        const message = error instanceof Error ? error.message : String(error);
+        alert(`Error saving world data: ${message}`);
       } finally {
         setIsSaving(false);
       }
